@@ -1,0 +1,52 @@
+# The gates, run in public, on every projection.
+#
+# ◆ This is what makes "Don't trust this README. Run it." checkable by a stranger without
+#   cloning: the run log shows the same pass / fail / skip counts they would get locally.
+# ⚠️ A skipped gate is not a pass. The suite exits 0 on skips by design, so a green check
+#   here means "nothing failed", not "everything ran". The counts are in the job summary.
+name: gates
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    name: seven gates (skips are not passes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: versions
+        run: rustc --version && node --version && python3 --version
+
+      # Gate ⑤ drives a real browser and clicks a real page. That is the claim; so install one.
+      - name: browser for the projection gate
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: run the gates
+        id: gates
+        run: |
+          set -o pipefail
+          bash symbolon/promote.sh 2>&1 | tee /tmp/gates.log
+
+      - name: report the counts, including what did not run
+        if: always()
+        run: |
+          {
+            echo '## Gate results'
+            echo
+            echo '```'
+            grep -E '^(門|  ✓|  ·|  ✗|通過|✅|⏸|⛔)' /tmp/gates.log || cat /tmp/gates.log
+            echo '```'
+            echo
+            echo '⚠️ Two gates cannot run here: the deterministic instruction counter needs a'
+            echo 'sister runtime that is not published, and the isolation gate only means'
+            echo 'something in the source tree. They report as skipped, never as passed.'
+          } >> "$GITHUB_STEP_SUMMARY"

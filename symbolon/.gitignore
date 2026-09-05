@@ -3,3 +3,5 @@
 #    ⇒ この一枚は名乗り台帳に載せて、影へも出す。
 *.wasm
 __pycache__/
+node_modules/
+package*.json
