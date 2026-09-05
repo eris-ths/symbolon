@@ -27,7 +27,13 @@ echo "== 昇格試験 =="
 # ---- 門③ 契約を変えていない(先に撃つ ── 契約が動いていたら他の緑は意味を持たない)----
 echo "門③ 契約"
 if ! command -v python3 >/dev/null; then sk "python3 が無い"; else
-  python3 floor_emit.py >/dev/null 2>&1
+  # ⚠️ 素材の作り直しは **本体でしかできない**(floor_emit.py は kokkos を要る ⇒ 影に出せない)。
+  #    黙って飛ばすと「作り直して一致した」と読める ⇒ どちらを撃ったかを言う。
+  if [ -f floor_emit.py ]; then
+    python3 floor_emit.py >/dev/null 2>&1 || { ng "契約の素材を作り直せない(floor_emit.py が落ちた)"; }
+  else
+    echo "    · 素材の作り直しは飛ばす(本体にだけ在る)⇒ **置いてある物の指紋**を見る"
+  fi
   lockv=$(awk '$1=="version"{print $2}' contract.lock)
   bad=0
   while read -r k f want; do
@@ -58,7 +64,10 @@ if [ ! -x "$fl" ]; then sk "floor_ladder が無い"; else
   bad=0; got=0
   for p in probe_clos probe_cons probe_life; do
     o="$("$fl" --probe $p.json 2>&1)"
-    printf '%s' "$o" | grep -q '全段一致' || { bad=1; echo "    ✗ $p が一致しない"; }
+    # ⚠️ 錨は **符牒**。かつて '全段一致' という一文に錨づけていて、その一文を
+    #    「床D/段E/段F 一致」へ直した日に門が落ちた(落ちたのは正しい —— 在ることを要る門だから)。
+    #    ⇒ 文言は直る。符牒は直らない。
+    printf '%s' "$o" | grep -q '\[AGREE stage-DEF\]' || { bad=1; echo "    ✗ $p が一致しない"; }
     printf '%s' "$o" | grep -q '命令の減り' && got=$((got+1))
   done
   if [ "$bad" = 0 ] && [ "$got" -ge 3 ]; then ok "probe 三本が期待値と一致し、**命令数を出している**"
@@ -104,9 +113,17 @@ base="${BASE:-origin/main}"
 if [ ! -e "$repo/melon" ] && [ ! -e "$repo/experiments/third/kokkos.py" ]; then
   sk "この木に言語実装が無い ⇒ 隔離は測れない(本体の側でだけ意味を持つ門)"
 elif ! git -C "$repo" rev-parse "$base" >/dev/null 2>&1; then sk "基準 $base が引けない(BASE= で指定)"; else
-  d=$(git -C "$repo" diff --name-only "$base"...HEAD -- melon/ koinon/ experiments/third/kokkos.py experiments/third/recursion.py | wc -l)
+  # 🔴 2026-09-05: ここは **「無いこと」を根拠にする唯一の門**だった ⇒ git が落ちても
+  #    `| wc -l` が 0 を返し、**静かに通っていた**（撃って確認）。
+  #    ⇒ 他の門は「✓ の行が在る」「減りが 3 本在る」と *在ることを要る* ので、壊れれば落ちる。
+  #      不在を根拠にする門だけは、rc を自分で見なければ嘘をつく。
+  if ! files=$(git -C "$repo" diff --name-only "$base"...HEAD -- melon/ koinon/ experiments/third/kokkos.py experiments/third/recursion.py 2>&1); then
+    ng "隔離を測れない(git が落ちた: $(printf '%s' "$files" | head -1))"
+  else
+  d=$(printf '%s' "$files" | grep -c . || true)
   if [ "$d" = 0 ]; then ok "$base 以降、**言語実装に一行も触れていない**"
   else ng "言語実装に触れている($d ファイル)⇒ 契約だけで足りていない"; fi
+  fi
 fi
 
 # ---- 門⑦ 主張が門番に裏打ちされている ----

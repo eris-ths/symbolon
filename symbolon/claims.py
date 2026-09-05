@@ -58,6 +58,11 @@ def 建てる():
     "life":      ([FL, "--probe", "probe_life.json"],                 None),
     "life_own":  ([FL, "--probe", "probe_life.json", "--own"],                 None),
     "life_own2": ([FL, "--probe", "probe_life.json", "--own2"],                 None),
+    # 🔴 **断りを要る門**(2026-09-05)。他の門は「畳めた/一致した」を要るが、この二本は
+    #    **畳めないと言うこと**を要る。証拠の向きは同じ（在ることを要る）—— 印 [REFUSE …] が
+    #    出力に無ければ落ちる。⚠️ 錨は符牒であって文言ではない（言い換えで静かに外れないように）。
+    "prepend":   ([FL, "--probe", "probe_prepend.json"],              None),
+    "strbox":    ([FL, "--probe", "probe_strbox.json"],               None),
     # ⚠️ 吐いた物を走らせる門は、吐く門の *後* でなければ意味がない。順を宣言する
     #    （cache の並び順に頼っていた —— 脆かった）。
     "str_run":   (["node", "probe_run.mjs", "probe_str.wasm", "87320"], ("後に", "str")),

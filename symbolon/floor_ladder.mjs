@@ -4,7 +4,8 @@
 // *床の表現の勝ち* だ」を、host 言語を替えて二点で確かめる。契約(14 op)も値モデル
 // (number | ["⟨N⟩"] | ["⟨P⟩",a,d])も machine.json / cases.json も一切変えていない。
 //
-// 正直な線引き: naive 側(runFloor)は head-to-head のため floor.mjs から写した(**SOT は floor.mjs**)。
+// 正直な線引き: naive 側(runFloor)は head-to-head のため **本体側の naive な床から写した**
+// (SOT はそちら。この木には持ってきていない)。
 // 写しの腐りは毎回 cases.json で両床を突き合わせて検出する(食い違えば exit 1)。
 //
 //   node floor_ladder.mjs        # lab/ で(machine.json / cases.json / bench_host.json を読む)
@@ -17,7 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const machine = JSON.parse(readFileSync(join(here, "machine.json"), "utf8"));
 const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf8"));
 
-// ---- 値モデル(floor.mjs と同一)-------------------------------------------
+// ---- 値モデル(本体側の床と同一)-------------------------------------------
 const isPair = (v) => Array.isArray(v) && v.length === 3 && v[0] === "⟨P⟩";
 const NIL = () => ["⟨N⟩"];
 function deepEq(a, b) {
@@ -31,7 +32,7 @@ function deepEq(a, b) {
 }
 const truthy = (v) => v !== 0;
 
-// ==== 床 A: naive(floor.mjs から写し。文字列 switch + 文字列キー host)==========
+// ==== 床 A: naive(本体側の床から写し。文字列 switch + 文字列キー host)==========
 function runNaive(machineAst, host, fuel) {
   let respawn = true;
   function ev(n) {

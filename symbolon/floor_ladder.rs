@@ -799,9 +799,11 @@ enum Kind { Int, List, Str }
 
 fn kname(k: Kind) -> &'static str { match k { Kind::Int => "int", Kind::List => "list", Kind::Str => "str" } }
 
-/// list を要る所は str も受ける —— **str は「小さい整数の list」の詰めた姿**で、意味は同じ。
-/// ⚠️ 契約は一文字も変わらない(op も machine.json も同じ)。変わるのは *置き方* だけ。
-fn listish(k: Kind) -> bool { k == Kind::List || k == Kind::Str }
+// ⚠️ ここに `listish`(= list を要る所は str も受ける)が在った。**一度も呼ばれていなかった**。
+//    受け入れの実体は `want` の中に埋まっていて、注釈だけがここで「設計」を名乗っていた。
+//    ⇒ 2026-09-05、注釈の言う通りに受け入れていた `want` ごと外した。理由は `want` の上に書く。
+//    ◆ str は「小さい整数の list」で **意味は同じ**。だが **置き方が違う** ⇒ 意味が同じことは、
+//      語として入れ替えてよい理由にならない。契約(op / machine.json)は一文字も変わらない。
 
 struct WComp {
     b: Vec<u8>, env: Vec<(i64, Bind)>, nslots: u32, outer: Vec<(i64, Where)>,
@@ -849,8 +851,18 @@ impl WComp {
         }
     }
     fn slot_kind(&self, s: u32) -> Kind { *self.kinds.get(&s).unwrap_or(&Kind::Int) }
+    /// ⚠️ **str を list の代わりに通さない**(2026-09-05 実測で外した)。
+    /// str は「小さい整数の list」だが、**置き方が違う**(番地<<32|長さ の一語。セルではない)。
+    /// ⇒ *形を見て分ける* 所(car/cdr/pair?)は str を自分で捌くので、ここを通らない。
+    ///   *語として仕舞う* 所(cons の cdr / list スロットへの setbox)で通すと、
+    ///   仕舞った先は「list」と静的に信じたまま **詰めた語を番地として読む** ⇒ 静かに間違える。
+    ///   実測: 前置も setbox も 115 の所で **0 を返した**(落ちもしなかった)。
     fn want(k: Kind, got: Kind, what: &str) -> Result<(), String> {
-        if k == got || (k == Kind::List && got == Kind::Str) { Ok(()) } else { Err(format!("{} は {} を要るが {} が来た(形が静的に決まらない)", what, kname(k), kname(got))) }
+        if k == got { return Ok(()); }
+        let 訳 = if k == Kind::List && got == Kind::Str {
+            " —— str は詰めた一語(番地<<32|長さ)。list の語として仕舞えない [REFUSE str-as-list]"
+        } else { "(形が静的に決まらない)" };
+        Err(format!("{} は {} を要るが {} が来た{}", what, kname(k), kname(got), 訳))
     }
 
     fn bind_let(&mut self, arg: &Json) -> Result<(), String> {
@@ -963,7 +975,14 @@ impl WComp {
                 let a = self.emit_val(pcar(arg))?; Self::want(Kind::Int, a, "cons の car")?;
                 let (hp, ta, td) = self.heap_locals();
                 self.op_u(0x21, ta);                                                       // local.set $ta
-                let d = self.emit_val(pcdr(arg))?; Self::want(Kind::List, d, "cons の cdr")?;
+                let d = self.emit_val(pcdr(arg))?;
+                if d == Kind::Str {
+                    // 前置は **コピーが要る**(詰めた実体の前に一語は置けない)。
+                    // 段G′ は断り、段E に落とす —— *遅いが正しい*。⚠️ 黙って積むと静かに間違える。
+                    // ⚠️ 印は **文言でなく符牒**。門を日本語の一文に錨づけると、言い換えた日に静かに外れる。
+                    return Err("cons の前置(詰めた文字列の前に足す)は畳めない —— コピーが要る [REFUSE str-prepend]".into());
+                }
+                Self::want(Kind::List, d, "cons の cdr")?;
                 self.op_u(0x21, td);
                 for (off, loc) in [(0u32, ta), (8, td)] {
                     self.op_u(0x20, hp); self.op(0xA7);                                    // i32.wrap_i64
@@ -1392,7 +1411,14 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
                                                 name, name, show(&expect)),
                 Err(e) => println!("  段G′ **吐けない** —— {}", e),
             }
-            println!("\n  秤: 期待 {} と {}", show(&expect), if ok { "全段一致 ✓" } else { "✗ 不一致" });
+            // ⚠️ 段G′ は wasm なので **ここでは走っていない**(この bin に runtime が無い)。
+            //    かつて「全段一致 ✓」と出していたが、それは 床D/段E/段F の話だった ⇒ 名が範囲を偽っていた。
+            println!("\n  秤: 期待 {} と 床D/段E/段F 一致 {}", show(&expect),
+                     if ok { "✓ [AGREE stage-DEF]" } else { "✗ 不一致" });
+            if let Ok((_, _, name)) = &g_res {
+                println!("  ⚠️ 段G′ は **まだ走らせていない** —— 出口の一致は別に撃つ:");
+                println!("     node probe_run.mjs {} {}", name, show(&expect));
+            }
             if !ok { std::process::exit(1); }
             return;
         }

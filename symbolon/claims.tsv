@@ -61,3 +61,5 @@ str/減り	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,3
 段G‴/str/バイト	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,331 | **418 分の 1** | **⟦256⟧ B** | **0 セル** |	str	段G′ wasm (\d+) B
 str/峰	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,331 | **418 分の 1** | **256 B** | **⟦0⟧ セル** |	str_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 合流/str	COMMON.md	`probe_str` の決定的 icount **⟦33,537⟧**	icount	^probe_str\s+(\d+)
+str/前置/断り	symbolon/MISSES.md	must report `REFUSE ⟦str-prepend⟧`	prepend	段G′ \*\*吐けない\*\*.*\[REFUSE (str-prepend)\]
+str/箱/断り	symbolon/MISSES.md	must report `REFUSE ⟦str-as-list⟧`	strbox	段G′ \*\*吐けない\*\*.*\[REFUSE (str-as-list)\]
