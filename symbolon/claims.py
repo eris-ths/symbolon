@@ -14,11 +14,30 @@
 # 台帳 claims.tsv の列: id / 文書 / 姿 / 門 / 正規表現
 #   姿   … 文書に literal で在るべき一文。主張する数だけを ⟦ ⟧ で括る。
 #   正規表現 … 門の出力から同じ数を取り出す。捕獲群ひとつ。空なら ② を飛ばす(門が無い主張)。
-import os, re, subprocess, sys
+import os, re, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.abspath(os.path.join(HERE, ".."))
-FL   = os.environ.get("FL", "/tmp/fl")
+FL   = os.environ.get("FL", "")
+
+def 建てる():
+    """門を撃つ実体（床の梯子）を用意する。
+    ⚠️ 2026-09-05 実測 —— ここが `/tmp/fl` 決め打ちだったため、**手元では偶然通り、CI では
+       55 件すべてを黙って飛ばした**。単独で叩かれても成り立つように、無ければ自分で建てる。"""
+    global FL
+    if FL and os.path.exists(FL):
+        return True
+    src = os.path.join(HERE, "floor_ladder.rs")
+    if not shutil.which("rustc") or not os.path.exists(src):
+        return False
+    out = os.path.join(tempfile.mkdtemp(), "fl")
+    if subprocess.run(["rustc", "-O", src, "-o", out],
+                      capture_output=True).returncode != 0:
+        return False
+    FL = out
+    return True
+
+建った = 建てる()
 
 門 = {
     "ladder": [FL],
@@ -75,7 +94,7 @@ def 撃つ(name):
     """門を一度だけ撃って出力を返す。撃てなければ None(= skip)。"""
     if name not in 撃つ.cache:
         cmd = 門[name]
-        if cmd[0] == FL and not os.path.exists(FL):
+        if cmd[0] == FL and not 建った:
             撃つ.cache[name] = None
         elif name == "icount" and not os.environ.get("ERIS_EXP03"):
             撃つ.cache[name] = None
@@ -111,7 +130,8 @@ def main():
             continue
         out = 撃つ(gate)
         if out is None:
-            飛ばした.append((cid, f"門 {gate} を撃てない"))
+            理由 = "床の梯子を建てられない(rustc が無い)" if not 建った else f"門 {gate} を撃てない"
+            飛ばした.append((cid, 理由))
             continue
         m = re.search(r"⟦(.+?)⟧", 姿)
         if not m:

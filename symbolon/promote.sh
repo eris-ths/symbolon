@@ -112,7 +112,8 @@ fi
 # ---- 門⑦ 主張が門番に裏打ちされている ----
 echo "門⑦ 主張と門番"
 if ! command -v python3 >/dev/null; then sk "python3 が無い"; else
-  out=$(cd "$here" && python3 claims.py 2>&1) || true
+  # ⚠️ 建てた実体を渡す。渡さないと claims.py は自分で建て直す(遅いだけで正しくはある)。
+  out=$(cd "$here" && FL="$fl" python3 claims.py 2>&1) || true
   if printf '%s' "$out" | grep -q "✓ 判定"; then
     ok "$(printf '%s' "$out" | grep -m1 '② 再導出' | sed 's/^ *//')"
   elif printf '%s' "$out" | grep -q "● 判定"; then
