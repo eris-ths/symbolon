@@ -55,3 +55,9 @@ README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦133⟧ 
 README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B
 README/頭/wasm	symbolon/README.md	**⟦100⟧-byte** wasm	web	wasm (\d+) B
 README/頭/比	symbolon/README.md	falls by **⟦407⟧×**	ladder	段E は \d+ 個。\*\*(\d+) 分の 1
+床D/str/命令	COMMON.md	| **文字列が主役**(47 文字 ×20) | ⟦7,250,554⟧ | 17,331 | **418 分の 1** | **256 B** | **0 セル** |	str	床D\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+段E/str/命令	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | ⟦17,331⟧ | **418 分の 1** | **256 B** | **0 セル** |	str	段E\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+str/減り	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,331 | **⟦418⟧ 分の 1** | **256 B** | **0 セル** |	str	= \*\*(\d+) 分の 1\*\*
+段G‴/str/バイト	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,331 | **418 分の 1** | **⟦256⟧ B** | **0 セル** |	str	段G′ wasm (\d+) B
+str/峰	COMMON.md	| **文字列が主役**(47 文字 ×20) | 7,250,554 | 17,331 | **418 分の 1** | **256 B** | **⟦0⟧ セル** |	str_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
+合流/str	COMMON.md	`probe_str` の決定的 icount **⟦33,537⟧**	icount	^probe_str\s+(\d+)

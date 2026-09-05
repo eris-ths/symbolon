@@ -36,7 +36,7 @@ peakcells() { ( cd "$work" && ./init "$1" 2>&1 ) >/dev/null; }   # 峰は node �
 
 echo "== 決定的な命令数(exp/03 の init.zig。byte-walk・seed 固定で byte 一致)=="
 printf '%-26s %10s\n' 'ROM' 'instrs'
-for w in compiled probe_clos; do
+for w in compiled probe_clos probe_str; do
   [ -f "$here/$w.wasm" ] && printf '%-26s %10s\n' "$w" "$(icount "$here/$w.wasm")"
 done
 echo

@@ -43,11 +43,14 @@ def 建てる():
     "ladder": [FL],
     "clos":   [FL, "--probe", "probe_clos.json"],
     "cons":   [FL, "--probe", "probe_cons.json"],
+    "str":    [FL, "--probe", "probe_str.json"],
     "web":    [FL, "--web"],
     "engine": [FL, "--engine"],
     "life":      [FL, "--probe", "probe_life.json"],
     "life_own":  [FL, "--probe", "probe_life.json", "--own"],
     "life_own2": [FL, "--probe", "probe_life.json", "--own2"],
+    # ⚠️ 実際に走らせて峰を読む口 —— 吐いた物が動くかまで見る門（2026-09-05）
+    "str_run": ["node", "probe_run.mjs", "probe_str.wasm", "87320"],
     "icount": ["bash", "icount.sh"],
 }
 

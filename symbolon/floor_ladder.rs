@@ -795,9 +795,13 @@ fn scan_owned(n: &Json, t: i64, ctx: u8) -> bool {   // ctx: 0=その他 / 1=覗
 /// 段G′ —— 値の *形* を静的に推す。これが在れば pair も register / 線形メモリに置ける。
 /// ⚠️ 扱うのは Int と「int の list」だけ。入れ子 list や混在は **断る**(黙って通さない)。
 #[derive(Clone, Copy, PartialEq)]
-enum Kind { Int, List }
+enum Kind { Int, List, Str }
 
-fn kname(k: Kind) -> &'static str { match k { Kind::Int => "int", Kind::List => "list" } }
+fn kname(k: Kind) -> &'static str { match k { Kind::Int => "int", Kind::List => "list", Kind::Str => "str" } }
+
+/// list を要る所は str も受ける —— **str は「小さい整数の list」の詰めた姿**で、意味は同じ。
+/// ⚠️ 契約は一文字も変わらない(op も machine.json も同じ)。変わるのは *置き方* だけ。
+fn listish(k: Kind) -> bool { k == Kind::List || k == Kind::Str }
 
 struct WComp {
     b: Vec<u8>, env: Vec<(i64, Bind)>, nslots: u32, outer: Vec<(i64, Where)>,
@@ -810,6 +814,8 @@ struct WComp {
     foreign_list_write: bool,         // region の中から *外の* list を書いたか(書いたら捨てられない)
     root: Option<Json>,               // 所有判定は全プログラムを見る必要がある
     owned: HashMap<u32, i64>,         // 一意所有と判定した box スロット → その var id
+    pool: Vec<u8>,                    // リテラル文字列の実体。線形メモリの 16 番地から置く
+    tstr: Option<u32>,                // str を二度使う時の控え
 }
 
 impl WComp {
@@ -817,7 +823,7 @@ impl WComp {
         WComp { b: Vec::new(), env: Vec::new(), nslots: 0, outer: Vec::new(),
                 fns: Vec::new(), depth: 0, kinds: HashMap::new(), heap: None,
                 own: 0, peak: true, root: None, owned: HashMap::new(),
-                regions: Vec::new(), foreign_list_write: false }
+                regions: Vec::new(), foreign_list_write: false, pool: Vec::new(), tstr: None }
     }
     fn slot(&mut self) -> u32 { let s = self.nslots; self.nslots += 1; s }
     fn look(&self, id: i64) -> Option<Bind> { self.env.iter().rev().find(|(i, _)| *i == id).map(|(_, b)| *b) }
@@ -835,7 +841,8 @@ impl WComp {
     fn finish(&mut self) {
         if let Some((hp, _, _)) = self.heap {
             let mut pre = Vec::new();
-            pre.push(0x42); sleb(16, &mut pre);          // i64.const 16
+            let base = 16 + ((self.pool.len() as i64 + 15) / 16) * 16;   // 池の後ろ、16 境界に揃える
+            pre.push(0x42); sleb(base, &mut pre);        // i64.const <heap の始まり>
             pre.push(0x21); uleb(hp, &mut pre);          // local.set $hp
             pre.extend_from_slice(&self.b);
             self.b = pre;
@@ -843,7 +850,7 @@ impl WComp {
     }
     fn slot_kind(&self, s: u32) -> Kind { *self.kinds.get(&s).unwrap_or(&Kind::Int) }
     fn want(k: Kind, got: Kind, what: &str) -> Result<(), String> {
-        if k == got { Ok(()) } else { Err(format!("{} は {} を要るが {} が来た(形が静的に決まらない)", what, kname(k), kname(got))) }
+        if k == got || (k == Kind::List && got == Kind::Str) { Ok(()) } else { Err(format!("{} は {} を要るが {} が来た(形が静的に決まらない)", what, kname(k), kname(got))) }
     }
 
     fn bind_let(&mut self, arg: &Json) -> Result<(), String> {
@@ -899,6 +906,40 @@ impl WComp {
         match self.look(pnum(pcdr(h))) { Some(Bind::Boxed(s)) => Ok(s), _ => Err("box handle が静的に解けない".into()) }
     }
 
+    /// 静的な cons の鎖 —— car が 0..255 の lit、cdr が nil か同じ形 —— を byte 列として読む。
+    /// ⚠️ これが見抜けなければ「文字列の速い出口」は成立しない(2026-09-05 の予想の難所②)。
+    fn as_static_str(n: &Json) -> Option<Vec<u8>> {
+        let mut out = Vec::new();
+        let mut cur = n;
+        loop {
+            if !is_p(cur) { return None; }
+            match pnum(pcar(cur)) {
+                7 => return if out.len() >= 2 { Some(out) } else { None },      // nil で閉じた
+                8 => {
+                    let a = pcar(pcdr(cur));
+                    if !is_p(a) || pnum(pcar(a)) != 0 { return None; }          // car が lit でない
+                    let v = pnum(pcdr(a));
+                    if !(0..=255).contains(&v) { return None; }                 // byte に収まらない
+                    out.push(v as u8);
+                    cur = pcdr(pcdr(cur));
+                }
+                _ => return None,
+            }
+            if out.len() > 65535 { return None; }
+        }
+    }
+    /// 池へ入れて (番地<<32 | 長さ) を返す。同じ文字列は一度だけ置く。
+    fn intern(&mut self, bytes: &[u8]) -> i64 {
+        let at = match self.pool.windows(bytes.len()).position(|w| w == bytes) {
+            Some(i) => i, None => { let i = self.pool.len(); self.pool.extend_from_slice(bytes); i }
+        };
+        (((16 + at) as i64) << 32) | bytes.len() as i64
+    }
+    fn tmp_str(&mut self) -> u32 {
+        if let Some(t) = self.tstr { return t; }
+        let t = self.slot(); self.tstr = Some(t); t
+    }
+
     fn emit_val(&mut self, n: &Json) -> Result<Kind, String> {
         if !is_p(n) { return Err("object 節でない".into()); }
         let tag = pnum(pcar(n));
@@ -912,6 +953,12 @@ impl WComp {
                    Self::want(Kind::Int, a, "eq")?; Self::want(Kind::Int, b, "eq")?;
                    self.op(0x51); self.op(0xAD); Kind::Int }                               // i64.eq → extend
             7 => { self.op(0x42); self.b.push(0x00); Kind::List }                          // nil = 番地 0
+            8 if Self::as_static_str(n).is_some() => {   // 段G‴: 静的な文字列は **詰めて置く**
+                let bytes = Self::as_static_str(n).unwrap();
+                let v = self.intern(&bytes);
+                self.op(0x42); sleb(v, &mut self.b);                                       // i64.const (番地<<32|長さ)
+                Kind::Str
+            }
             8 => { // cons —— bump heap に 16 B 積む。**これが段G′ の芯**
                 let a = self.emit_val(pcar(arg))?; Self::want(Kind::Int, a, "cons の car")?;
                 let (hp, ta, td) = self.heap_locals();
@@ -943,12 +990,37 @@ impl WComp {
                 }
                 Kind::List
             }
-            9 | 10 => { let x = self.emit_val(arg)?; Self::want(Kind::List, x, "car/cdr")?;
-                        self.op(0xA7); self.op(0x29); self.b.push(0x03);                   // i32.wrap / i64.load
-                        self.u(if tag == 9 { 0 } else { 8 });
-                        if tag == 9 { Kind::Int } else { Kind::List } }
-            11 => { let x = self.emit_val(arg)?; Self::want(Kind::List, x, "pair?")?;
-                    self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }  // != 0
+            9 | 10 | 11 => {
+                // 先に emit して、返ってきた *形* で分ける。⇒ 先読みの仕掛けが要らない。
+                let x = self.emit_val(arg)?;
+                if x != Kind::Str {
+                    Self::want(Kind::List, x, "car/cdr/pair?")?;
+                    return Ok(match tag {
+                        9 | 10 => { self.op(0xA7); self.op(0x29); self.b.push(0x03);        // i32.wrap / i64.load
+                                    self.u(if tag == 9 { 0 } else { 8 });
+                                    if tag == 9 { Kind::Int } else { Kind::List } }
+                        _ => { self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }
+                    });
+                }
+                // 詰めた文字列の上での car / cdr / pair? —— **セルを一つも触らない**。
+                match tag {
+                    9 => { // car = 先頭の byte。番地 = v >>> 32
+                        self.op(0x42); self.b.push(32); self.op(0x88);                     // i64.const 32 / i64.shr_u
+                        self.op(0xA7); self.op(0x2D); self.b.push(0x00); self.b.push(0x00); // i32.wrap / i32.load8_u
+                        self.op(0xAD); Kind::Int }                                          // i64.extend_i32_u
+                    10 => { // cdr = (番地+1, 長さ-1)。長さ 0 なら nil(=0)。
+                        let t = self.tmp_str(); self.op_u(0x22, t);                         // local.tee
+                        self.op(0x42); sleb(0xFFFF_FFFFu32 as i64, &mut self.b); self.op(0x7C);  // v + (1<<32) - 1
+                        self.op(0x42); self.b.push(0x00);                                   // 偽の枝: nil
+                        self.op_u(0x20, t); self.op(0x42); sleb(0xFFFF_FFFFu32 as i64, &mut self.b);
+                        self.op(0x83);                                                      // i64.and → 長さ
+                        self.op(0x42); self.b.push(0x00); self.op(0x52);                    // i64.ne → i32
+                        self.op(0x1B); Kind::Str }                                          // select
+                    _ => { // pair? = 長さ != 0
+                        self.op(0x42); sleb(0xFFFF_FFFFu32 as i64, &mut self.b); self.op(0x83);
+                        self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }
+                }
+            }
             17 => {                                                                        // oapp —— inline
                 let f = pcar(arg);
                 if !is_p(f) || pnum(pcar(f)) != 3 { return Err("呼び先が var でない(閉包が escape)".into()); }
@@ -1071,7 +1143,10 @@ fn section(id: u8, content: Vec<u8>, out: &mut Vec<u8>) {
 }
 
 /// 完全な wasm module を組む(export "run": () -> i64)。
-fn wasm_module(body: &[u8], nlocals: u32, pages: Option<u32>) -> Vec<u8> {
+fn wasm_module(body: &[u8], nlocals: u32, pages: Option<u32>) -> Vec<u8> { wasm_module_d(body, nlocals, pages, &[]) }
+
+/// ⚠️ data section(11)は code(10)の **後ろ**。節の順を違えると読み手が拒む。
+fn wasm_module_d(body: &[u8], nlocals: u32, pages: Option<u32>, pool: &[u8]) -> Vec<u8> {
     let mut m: Vec<u8> = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
     let mut t = Vec::new(); uleb(1, &mut t); t.push(0x60); uleb(0, &mut t); uleb(1, &mut t); t.push(0x7E);
     section(1, t, &mut m);                                            // Type: () -> i64
@@ -1095,6 +1170,12 @@ fn wasm_module(body: &[u8], nlocals: u32, pages: Option<u32>) -> Vec<u8> {
     fb.extend_from_slice(body); fb.push(0x0B);                        // end
     let mut c = Vec::new(); uleb(1, &mut c); uleb(fb.len() as u32, &mut c); c.extend_from_slice(&fb);
     section(10, c, &mut m);                                           // Code
+    if !pool.is_empty() {                                             // 段G‴: リテラル文字列の実体
+        let mut d = Vec::new(); uleb(1, &mut d); uleb(0, &mut d);      // 1 本 / memidx 0
+        d.push(0x41); sleb(16, &mut d); d.push(0x0B);                  // offset = i32.const 16
+        uleb(pool.len() as u32, &mut d); d.extend_from_slice(pool);
+        section(11, d, &mut m);
+    }
     m
 }
 
@@ -1153,8 +1234,8 @@ fn main() {
         let mut wc = WComp::new();
         wc.emit_val(prog).expect("段G: 畳めない");
         wc.finish();
-        let pages = if wc.heap.is_some() { Some(16) } else { None };
-        let module = wasm_module(&wc.b, wc.nslots, pages);
+        let pages = if wc.heap.is_some() || !wc.pool.is_empty() { Some(16) } else { None };
+        let module = wasm_module_d(&wc.b, wc.nslots, pages, &wc.pool);
         fs::write("compiled.wasm", &module).unwrap();
 
         let html = format!(r#"<!doctype html><meta charset="utf-8"><title>kokkos → wasm(自己完結)</title>
@@ -1272,8 +1353,8 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
             wc.root = Some(prog.clone());
             let g_res = wc.emit_val(prog).map(|_| {
                 wc.finish();
-                let pages = if wc.heap.is_some() { Some(16) } else { None };
-                let m = wasm_module(&wc.b, wc.nslots, pages);
+                let pages = if wc.heap.is_some() || !wc.pool.is_empty() { Some(16) } else { None };
+                let m = wasm_module_d(&wc.b, wc.nslots, pages, &wc.pool);
                 let name = file.replace(".json", &format!("{}{}",
                     match wc.own { 2 => ".own2", 1 => ".own", _ => "" },
                     if wc.peak { ".wasm" } else { ".np.wasm" }));
