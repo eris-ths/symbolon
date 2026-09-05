@@ -39,20 +39,32 @@ def 建てる():
 
 建った = 建てる()
 
+# (コマンド, 前提) —— **前提が満たされなければ skip。満たされて rc≠0 なら「壊れた」= 落ち。**
+# 🔴 2026-09-05、指摘を受けて直した。それまでは
+#    ① rc を見ておらず、失敗した門の *エラー文* を「門の出力」として cache していた
+#    ② skip の判定が icount だけの特別扱いで、一般則になっていなかった
+#    ⇒ 「撃てない(skip)」と「撃ったが壊れた(落ち)」は **別の事実**。混ぜると
+#      「落ちるべきでない落ち」の隣に「静かに通る」が待つ。
+# ⚠️ 前提に「素材が在ること」を書かない —— 台帳が名指す門の入力が無いのは
+#    *環境が無い* のではなく **この木の欠陥**。skip にすると「緑だが行が裸」に戻る。
+#    ⇒ 素材の不在は門が rc≠0 で落ち、**壊れた** として鳴る。skip は外の物にだけ許す。
 門 = {
-    "ladder": [FL],
-    "clos":   [FL, "--probe", "probe_clos.json"],
-    "cons":   [FL, "--probe", "probe_cons.json"],
-    "str":    [FL, "--probe", "probe_str.json"],
-    "web":    [FL, "--web"],
-    "engine": [FL, "--engine"],
-    "life":      [FL, "--probe", "probe_life.json"],
-    "life_own":  [FL, "--probe", "probe_life.json", "--own"],
-    "life_own2": [FL, "--probe", "probe_life.json", "--own2"],
-    # ⚠️ 実際に走らせて峰を読む口 —— 吐いた物が動くかまで見る門（2026-09-05）
-    "str_run": ["node", "probe_run.mjs", "probe_str.wasm", "87320"],
-    "icount": ["bash", "icount.sh"],
+    "ladder":    ([FL],                                              None),
+    "clos":      ([FL, "--probe", "probe_clos.json"],                 None),
+    "cons":      ([FL, "--probe", "probe_cons.json"],                 None),
+    "str":       ([FL, "--probe", "probe_str.json"],                 None),
+    "web":       ([FL, "--web"],                                     None),
+    "engine":    ([FL, "--engine"],                                  None),
+    "life":      ([FL, "--probe", "probe_life.json"],                 None),
+    "life_own":  ([FL, "--probe", "probe_life.json", "--own"],                 None),
+    "life_own2": ([FL, "--probe", "probe_life.json", "--own2"],                 None),
+    # ⚠️ 吐いた物を走らせる門は、吐く門の *後* でなければ意味がない。順を宣言する
+    #    （cache の並び順に頼っていた —— 脆かった）。
+    "str_run":   (["node", "probe_run.mjs", "probe_str.wasm", "87320"], ("後に", "str")),
+    "icount":    (["bash", "icount.sh"],                             ("env", "ERIS_EXP03")),
 }
+
+壊れた = object()          # 撃ったが落ちた。⚠️ skip ではない —— 隠すと「静かに通る」へ繋がる
 
 def 正規化(s):
     return re.sub(r"[,\s]", "", s)
@@ -93,22 +105,46 @@ def 台帳():
             rows.append((ln, *parts))
     return rows
 
+def 前提(name):
+    """満たされなければ *skip の理由* を返す。満たされていれば None。
+    ⚠️ 門ごとの特別扱いをやめ、宣言に寄せた（前は icount だけを名指しで見ていた）。"""
+    cmd, need = 門[name]
+    if cmd[0] == FL and not 建った:
+        return "床の梯子を建てられない(rustc が無い)"
+    if need is None:
+        return None
+    kind, v = need
+    if kind == "env" and not os.environ.get(v):
+        return f"{v} が無い"
+    if kind == "file" and not os.path.exists(os.path.join(HERE, v)):
+        return f"{v} が無い"
+    if kind == "後に":
+        o = 撃つ(v)
+        if o is None or o is 壊れた:
+            return f"門 {v} が先に撃てていない"
+    return None
+
+
 def 撃つ(name):
-    """門を一度だけ撃って出力を返す。撃てなければ None(= skip)。"""
+    """門を一度だけ撃つ。前提が無ければ None(skip)、**rc≠0 なら 壊れた**、通れば出力。"""
     if name not in 撃つ.cache:
-        cmd = 門[name]
-        if cmd[0] == FL and not 建った:
-            撃つ.cache[name] = None
-        elif name == "icount" and not os.environ.get("ERIS_EXP03"):
-            撃つ.cache[name] = None
+        why = 前提(name)
+        if why is not None:
+            撃つ.cache[name] = None; 撃つ.理由[name] = why
         else:
             try:
-                p = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=900)
-                撃つ.cache[name] = p.stdout + p.stderr
-            except Exception:
-                撃つ.cache[name] = None
+                p = subprocess.run(門[name][0], cwd=HERE, capture_output=True, text=True, timeout=900)
+                if p.returncode != 0:                      # 🔴 ここを見ていなかった
+                    撃つ.cache[name] = 壊れた
+                    t = (p.stderr or p.stdout).strip().splitlines()
+                    撃つ.理由[name] = f"rc={p.returncode} / {t[-1][:80] if t else '(出力なし)'}"
+                else:
+                    撃つ.cache[name] = p.stdout + p.stderr
+            except Exception as e:
+                撃つ.cache[name] = 壊れた; 撃つ.理由[name] = f"起動できない: {e}"
     return 撃つ.cache[name]
 撃つ.cache = {}
+撃つ.理由 = {}
 
 def main():
     rows = 台帳()
@@ -132,9 +168,11 @@ def main():
             飛ばした.append((cid, "門が無い(台帳が正規表現を持たない)"))
             continue
         out = 撃つ(gate)
+        if out is 壊れた:
+            落ちた.append((cid, "②門が壊れた", f"門 {gate}: {撃つ.理由.get(gate, '')}"))
+            continue
         if out is None:
-            理由 = "床の梯子を建てられない(rustc が無い)" if not 建った else f"門 {gate} を撃てない"
-            飛ばした.append((cid, 理由))
+            飛ばした.append((cid, f"門 {gate}: {撃つ.理由.get(gate, '撃てない')}"))
             continue
         m = re.search(r"⟦(.+?)⟧", 姿)
         if not m:
