@@ -70,7 +70,9 @@ jobs:
             echo '⚠️ Three gates cannot run in public, and are reported as skipped, never as passed:'
             echo '- **determinism** — needs a sister runtime that is not published'
             echo '- **isolation** — only means something in the source tree, which is not here'
-            echo '- **claims** — re-derives 50 of its 55 rows; the other 5 come from the counter above'
+            # ⚠️ 数を書かない —— ここに固定で書いた「50 of 55」は台帳が伸びて嘘になった（実測 2026-09-05）。
+            #    ⇒ 走った物の出力から引く。門番の無い数を、門番の報告に置かない。
+            echo "- **claims** — $(grep -E '② 再導出' /tmp/gates.log | tail -1 | sed 's/^ *//' || echo 'not reported')"
             echo
             echo 'The step before this one fails the run if the shape differs from that.'
             echo 'A green check on its own is not evidence that anything ran.'
