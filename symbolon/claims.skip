@@ -1,0 +1,52 @@
+# 免除表 —— 門番を持たなくてよい量と、その理由。
+# 理由は五語だけ: 再掲 / 導出 / 経緯 / 構造の定数 / 言い回し
+# ⚠️ 「門番を書くのが面倒」は理由ではない。ここに増えたら、増えた分だけ主張が裸になっている。
+# 鍵は 文書:正規化した量。行が動いても効くが、同じ量が別の場所に出ても効いてしまう(緩い側)。
+COMMON.md:300セル	再掲	§1-1 の cons 段E arena(台帳: 段E/cons/arena)
+COMMON.md:50セル	再掲	§1-5 表の値(台帳: 寿命/own・own2 と同じ行の量)
+COMMON.md:407分の1	再掲	台帳: 整数/減り
+COMMON.md:426分の1	再掲	台帳: cons/減り
+COMMON.md:187B	再掲	台帳: 段F/整数/バイト
+COMMON.md:133B	再掲	台帳: 段H/バイト
+COMMON.md:226B	再掲	台帳: 段G′/cons/バイト
+COMMON.md:80命令	再掲	台帳: 回収/region の行が持つ +80
+COMMON.md:4命令	導出	+80 = 20 回 × 4 命令(束縛 2 + scope 出口 2)
+COMMON.md:41命令	導出	icount の collapse 差。素の量は門 icount が持つ
+COMMON.md:1命令	言い回し	「1 命令も違わない」—— 量の主張ではない
+COMMON.md:16B	構造の定数	pair = i64 ×2。測った値ではなく設計の決め
+COMMON.md:214B	経緯	八段時点の値。今の値は §1-1 の表が正 ⇒ 作り直せない
+COMMON.md:98B	経緯	第七〜八段の値。今の値は §1-1 の表が正 ⇒ 作り直せない
+COMMON.md:107B	再掲	台帳: 段G/閉包/バイト
+COMMON.md:274B	再掲	台帳: 寿命/own2/バイト
+COMMON.md:39473→	再掲	§1-1 の cons 床D arena
+COMMON.md:187→	経緯	八段時点の値
+COMMON.md:1000→	再掲	§1-5 の峰
+COMMON.md:114→	経緯	第六段の値
+COMMON.md:→107	再掲	台帳: 段G/閉包/バイト
+symbolon/MISSES.md:100×	経緯	外した予測そのもの（50〜100x）。作り直せない
+symbolon/MISSES.md:200×	経緯	外した予測そのもの（50〜200x）
+symbolon/MISSES.md:10×	経緯	外した予測そのもの（2〜10x）
+symbolon/MISSES.md:426×	再掲	台帳: README/cons/比
+symbolon/MISSES.md:1000→	再掲	§1-5 の峰 1,000 → 50
+symbolon/MISSES.md:300cells	再掲	台帳: 段E/cons/arena
+symbolon/README.md:407×	再掲	同じ頁の表（台帳: README/整数/比）
+symbolon/README.md:14instructions	構造の定数	契約の命令数。測った値ではなく設計の決め
+symbolon/VERIFY.md:6103390→	再掲	台帳: README/整数/前
+symbolon/VERIFY.md:→15011	再掲	台帳: README/整数/後
+symbolon/VERIFY.md:2350010→	再掲	台帳: README/閉包/前
+symbolon/VERIFY.md:→5711	再掲	台帳: README/閉包/後
+symbolon/VERIFY.md:3967486→	再掲	台帳: README/cons/前
+symbolon/VERIFY.md:→9320	再掲	台帳: README/cons/後
+symbolon/README.md:→15011	再掲	同じ行（台帳: README/整数/後）
+symbolon/README.md:→5711	再掲	同じ行
+symbolon/README.md:→9320	再掲	同じ行
+symbolon/README.md:6103390→	再掲	同じ行
+symbolon/README.md:2350010→	再掲	同じ行
+symbolon/README.md:3967486→	再掲	同じ行
+symbolon/README.md:407of408	再掲	台帳: README/整数/比 と同じ量の言い換え
+symbolon/README.md:408instructions	導出	407 分の 1 の言い換え（407 のうち 407 が消え、408 分の 1 が残る）。台帳: README/整数/比
+COMMON.md:11.3×	経緯	門番に捕まった側の値。今の走行は 10.7 で、時間の比なので門番を付けられない
+COMMON.md:407×	再掲	台帳: 整数/減り（英語面の言い換えを引用している）
+COMMON.md:6103390→	再掲	台帳: 床D/整数/命令
+symbolon/MISSES.md:8.6×	経緯	この repo より前の実測。ここに門は無い（外した予測 ①の実測値）
+symbolon/MISSES.md:1.1×	経緯	同上（外した予測 ②の実測値）

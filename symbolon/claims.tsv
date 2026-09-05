@@ -1,0 +1,55 @@
+# 台帳 —— 主張と門番の対応。列: id / 文書 / 姿(⟦⟧ が主張する数) / 門 / 正規表現
+# ⚠️ 数をここに三度目として書かない。姿は文書の literal、値は門の出力から取る(源は二つだけ)。
+床D/整数/命令	COMMON.md	| 整数ループ(sum 1..1000) | ⟦6,103,390⟧ | 15,011 | **407 分の 1** | 62,097 セル | **0** |	ladder	床D が実際に回した命令: (\d+) 個
+段E/整数/命令	COMMON.md	| 整数ループ(sum 1..1000) | 6,103,390 | ⟦15,011⟧ | **407 分の 1** | 62,097 セル | **0** |	ladder	段E 特殊化命令列.*?実行命令 (\d+) 個
+整数/減り	COMMON.md	| 整数ループ(sum 1..1000) | 6,103,390 | 15,011 | **⟦407⟧ 分の 1** | 62,097 セル | **0** |	ladder	段E は \d+ 個。\*\*(\d+) 分の 1
+床D/整数/arena	COMMON.md	| 整数ループ(sum 1..1000) | 6,103,390 | 15,011 | **407 分の 1** | ⟦62,097⟧ セル | **0** |	ladder	arena は 1 走行で C (\d+) セル
+四床/食い違い	COMMON.md	| ① 実装間の一致 | 四床 + Python が `cases.json` を通る | ✓ 食い違い ⟦0⟧ |	ladder	四床の食い違い (\d+)
+床D/閉包/命令	COMMON.md	| **閉包が主役**(非 escape 閉包 ×300) | ⟦2,350,010⟧ | 5,711 | **411 分の 1** | 24,123 セル | **0** |	clos	床D\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+段E/閉包/命令	COMMON.md	| **閉包が主役**(非 escape 閉包 ×300) | 2,350,010 | ⟦5,711⟧ | **411 分の 1** | 24,123 セル | **0** |	clos	段E\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+閉包/減り	COMMON.md	| **閉包が主役**(非 escape 閉包 ×300) | 2,350,010 | 5,711 | **⟦411⟧ 分の 1** | 24,123 セル | **0** |	clos	= \*\*(\d+) 分の 1\*\*
+床D/閉包/arena	COMMON.md	| **閉包が主役**(非 escape 閉包 ×300) | 2,350,010 | 5,711 | **411 分の 1** | ⟦24,123⟧ セル | **0** |	clos	床D.*?arena (\d+) セル
+床D/cons/命令	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | ⟦3,967,486⟧ | 9,320 | **426 分の 1** | 39,473 セル | **300** |	cons	床D\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+段E/cons/命令	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | ⟦9,320⟧ | **426 分の 1** | 39,473 セル | **300** |	cons	段E\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+cons/減り	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **⟦426⟧ 分の 1** | 39,473 セル | **300** |	cons	= \*\*(\d+) 分の 1\*\*
+床D/cons/arena	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **426 分の 1** | ⟦39,473⟧ セル | **300** |	cons	床D.*?arena (\d+) セル
+段E/cons/arena	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **426 分の 1** | 39,473 セル | **⟦300⟧** |	cons	段E.*?arena (\d+) セル
+段F/整数/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | ⟦187⟧ B / 217 B |	ladder	機械語 (\d+) B
+段F/閉包/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | 187 B / ⟦217⟧ B |	clos	機械語 (\d+) B
+段G/整数/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
+段G/閉包/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
+段G′/cons/バイト	COMMON.md	| **段G′ wasm(cons が主役 —— pair を線形メモリの bump heap へ)** | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
+段H/バイト	COMMON.md	| 段H engine wasm(状態 + step) | ⟦133⟧ B |	engine	wasm (\d+) B
+段G/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **⟦2,694⟧ B** / **4,122 B** |	web	自己完結 HTML (\d+) B
+段H/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **2,694 B** / **⟦4,122⟧ B** |	engine	自己完結 HTML (\d+) B
+閉包/inline/バイト	COMMON.md	inline で丸ごと消え、**wasm ⟦107⟧ B** まで届く。	clos	段G′ wasm (\d+) B
+速さ表/cons/バイト	COMMON.md	| cons が主役 | 0.0185 ms | **0.00068 ms** | **⟦226⟧ B** | ≈**17,800x** |	cons	段G′ wasm (\d+) B
+速さ表/閉包/バイト	COMMON.md	| 閉包が主役 | 0.0107 ms | **0.00012 ms** | **⟦107⟧ B** | ≈**60,000x** |	clos	段G′ wasm (\d+) B
+合流/kernel後	COMMON.md	※ `compiled.wasm` が 91→⟦100⟧ B になったのは `kernel` export(A(P) を測る口)を足したため	web	wasm (\d+) B
+結果/閉包	COMMON.md	node probe_run.mjs probe_clos.wasm ⟦45750⟧	clos	結果 (\d+)
+結果/cons	COMMON.md	node probe_run.mjs probe_cons.wasm ⟦45150⟧	cons	結果 (\d+)
+結果/寿命	COMMON.md	node probe_run.mjs probe_life.wasm      ⟦25500⟧	life	結果 (\d+)
+寿命/なし/峰	COMMON.md	| **なし** | **⟦1,000⟧ セル** | 0.00194 / 0.00198 / 0.00213 / 0.00263 ms | 266 B |	life	段E.*?arena (\d+) セル
+寿命/なし/バイト	COMMON.md	| **なし** | **1,000 セル** | 0.00194 / 0.00198 / 0.00213 / 0.00263 ms | ⟦266⟧ B |	life	段G′ wasm (\d+) B
+寿命/own/バイト	COMMON.md	| **セル単位に返す**(`--own`) | **50 セル** | 0.00227 / 0.00251 / 0.00255 / 0.00257 ms | ⟦286⟧ B |	life_own	段G′ wasm (\d+) B
+寿命/own2/バイト	COMMON.md	| **まとめて捨てる**(`--own2`, region) | **50 セル** | 0.00210 / 0.00214 / 0.00220 / 0.00223 ms | ⟦274⟧ B |	life_own2	段G′ wasm (\d+) B
+合流/compiled	COMMON.md	| `compiled`(sum 1..1000、100 B) | **⟦17,017⟧** |	icount	^compiled\s+(\d+)
+合流/clos	COMMON.md	| `probe_clos`(閉包、107 B) | **⟦6,317⟧** |	icount	^probe_clos\s+(\d+)
+回収/なし	COMMON.md	| なし | **⟦53,859⟧** | — |	icount	^probe_life\.np\s+(\d+)
+回収/セル単位	COMMON.md	| セル単位に返す | **⟦65,859⟧** | **+12,000 = +22.3%** |	icount	^probe_life\.own\.np\s+(\d+)
+回収/region	COMMON.md	| **まとめて捨てる(region)** | **⟦53,939⟧** | **+80 命令 = +0.149%** |	icount	^probe_life\.own2\.np\s+(\d+)
+README/整数/前	symbolon/README.md	| integer loop (`sum 1..1000`) | ⟦6,103,390⟧ → 15,011 | **407×** |	ladder	床D が実際に回した命令: (\d+) 個
+README/整数/後	symbolon/README.md	| integer loop (`sum 1..1000`) | 6,103,390 → ⟦15,011⟧ | **407×** |	ladder	段E 特殊化命令列.*?実行命令 (\d+) 個
+README/整数/比	symbolon/README.md	| integer loop (`sum 1..1000`) | 6,103,390 → 15,011 | **⟦407⟧×** |	ladder	段E は \d+ 個。\*\*(\d+) 分の 1
+README/閉包/前	symbolon/README.md	| closure-heavy (300 non-escaping closures) | ⟦2,350,010⟧ → 5,711 | **411×** |	clos	床D\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+README/閉包/後	symbolon/README.md	| closure-heavy (300 non-escaping closures) | 2,350,010 → ⟦5,711⟧ | **411×** |	clos	段E\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+README/閉包/比	symbolon/README.md	| closure-heavy (300 non-escaping closures) | 2,350,010 → 5,711 | **⟦411⟧×** |	clos	= \*\*(\d+) 分の 1\*\*
+README/cons/前	symbolon/README.md	| cons-heavy (build a 300-cell list, fold it) | ⟦3,967,486⟧ → 9,320 | **426×** |	cons	床D\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+README/cons/後	symbolon/README.md	| cons-heavy (build a 300-cell list, fold it) | 3,967,486 → ⟦9,320⟧ | **426×** |	cons	段E\s+[\d.]+ ms\s+結果 \d+\s+実行命令\s+(\d+)
+README/cons/比	symbolon/README.md	| cons-heavy (build a 300-cell list, fold it) | 3,967,486 → 9,320 | **⟦426⟧×** |	cons	= \*\*(\d+) 分の 1\*\*
+README/wasm/整数	symbolon/README.md	| wasm (integer loop / closure) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
+README/wasm/閉包	symbolon/README.md	| wasm (integer loop / closure) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
+README/wasm/cons	symbolon/README.md	| wasm with a bump heap (cons-heavy) | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
+README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦187⟧ B** |	ladder	機械語 (\d+) B
+README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦133⟧ B** |	engine	wasm (\d+) B
+README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B

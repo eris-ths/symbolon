@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>kokkos → wasm(自己完結)</title>
+<style>
+ :root{color-scheme:light dark;--ink:#1a1a1a;--bg:#fbfaf7;--dim:#6b6b6b;--line:#dcd8d0;--hit:#a4472f}
+ @media (prefers-color-scheme:dark){:root{--ink:#e8e6e1;--bg:#16161a;--dim:#9a9a9a;--line:#33333a;--hit:#e08a6a}}
+ body{margin:0;padding:2.2rem 1.4rem;background:var(--bg);color:var(--ink);
+      font:15px/1.75 ui-sans-serif,system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+ main{max-width:44rem;margin:0 auto} h1{font-size:1.25rem;margin:0 0 .3rem}
+ .dim{color:var(--dim);font-size:.86rem} code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ .out{font-size:2.4rem;font-weight:600;color:var(--hit);margin:.6rem 0}
+ table{border-collapse:collapse;width:100%;margin:1.2rem 0;font-size:.9rem}
+ td,th{border-bottom:1px solid var(--line);padding:.4rem .2rem;text-align:left}
+ td:last-child,th:last-child{text-align:right;font-family:ui-monospace,monospace}
+ .note{border-left:3px solid var(--line);padding:.1rem 0 .1rem .9rem;margin:1.2rem 0;font-size:.88rem;color:var(--dim)}
+</style>
+<main>
+<h1>kokkos の程式が、この頁の中で走る</h1>
+<p class="dim">外部 fetch ゼロ・server ゼロ・framework ゼロ。この 1 ファイルだけで完結する。</p>
+<p><code>i = 1000; s = 0; while i { s = s + i; i = i - 1 }; s</code></p>
+<div class="out" id="out">…</div>
+<table>
+ <tr><th>この頁が積んでいる wasm</th><td id="sz">—</td></tr>
+ <tr><th>期待値(Python 床が出した答え)</th><td>500500</td></tr>
+ <tr><th>秤</th><td id="ok">—</td></tr>
+</table>
+<div class="note">
+ これは <b>backend の選択肢</b>であって言語の性質ではない —— 同じ特殊化命令列が、
+ x86-64(187 B の機械語)にも wasm にも落ちる。HTML はその wasm を base64 で抱えているだけ。
+ 言語側に HTML も DOM も足していない。
+</div>
+</main>
+<script>
+const B="AGFzbQEAAAABBQFgAAF+AwIBAAcQAgNydW4AAAZrZXJuZWwAAAo9ATsBBH5C6AchAEIAIQFCACECAkADQCAAQgBRDQEgASAAfCEBIABCAX0hACACQgF8IQIMAAsLIAIhAyABCw==";
+const bin=Uint8Array.from(atob(B),c=>c.charCodeAt(0));
+document.getElementById("sz").textContent=bin.length+" B";
+WebAssembly.instantiate(bin).then(({instance})=>{
+  const t0=performance.now();
+  let r; for(let i=0;i<1000;i++) r=instance.exports.run();
+  const ms=(performance.now()-t0)/1000;
+  document.getElementById("out").textContent=String(r);
+  const ok=String(r)==="500500";
+  document.getElementById("ok").textContent=(ok?"一致 ✓":"不一致 ✗")+" / "+ms.toFixed(4)+" ms";
+  document.title=(ok?"一致 ":"不一致 ")+String(r);
+}).catch(e=>{document.getElementById("out").textContent="wasm 失敗: "+e;});
+</script>

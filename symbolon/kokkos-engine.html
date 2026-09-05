@@ -1,0 +1,70 @@
+<!doctype html><meta charset="utf-8"><title>kokkos engine seam(wasm × DOM)</title>
+<style>
+ :root{color-scheme:light dark;--ink:#1a1a1a;--bg:#fbfaf7;--dim:#6b6b6b;--line:#dcd8d0;--hit:#a4472f;--on:#4a7c59}
+ @media (prefers-color-scheme:dark){:root{--ink:#e8e6e1;--bg:#16161a;--dim:#9a9a9a;--line:#33333a;--hit:#e08a6a;--on:#7fb08e}}
+ body{margin:0;padding:2.2rem 1.4rem;background:var(--bg);color:var(--ink);
+   font:15px/1.75 ui-sans-serif,system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+ main{max-width:44rem;margin:0 auto} h1{font-size:1.2rem;margin:0 0 .3rem}
+ .dim{color:var(--dim);font-size:.86rem} code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ .row{display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0}
+ button{font:inherit;padding:.45rem 1rem;border:1px solid var(--line);border-radius:8px;
+   background:transparent;color:var(--ink);cursor:pointer}
+ button:hover{border-color:var(--hit)}
+ .dots{display:flex;gap:.35rem;margin:.9rem 0}
+ .dot{width:1.5rem;height:1.5rem;border-radius:50%;border:1px solid var(--line)}
+ .dot.on{background:var(--on);border-color:var(--on)}
+ .big{font-size:2rem;font-weight:600;color:var(--hit)}
+ table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem}
+ td,th{border-bottom:1px solid var(--line);padding:.35rem .2rem;text-align:left}
+ td:last-child,th:last-child{text-align:right;font-family:ui-monospace,monospace}
+ .note{border-left:3px solid var(--line);padding:.1rem 0 .1rem .9rem;margin:1.2rem 0;font-size:.88rem;color:var(--dim)}
+</style>
+<main>
+<h1>状態は wasm が持ち、DOM は JS が持つ</h1>
+<p class="dim">押すと <code>step(ev)</code> が走る。JS は状態を <b>読んで描くだけ</b>で、規則を一行も持たない。</p>
+
+<div class="dots" id="dots"></div>
+<p><span class="big" id="total">0</span> <span class="dim">/ 10 …… 折り返した回数 <b id="wraps">0</b></span></p>
+
+<div class="row">
+  <button id="b1">+1</button><button id="b3">+3</button><button id="br">reset(host が状態を書く)</button>
+</div>
+
+<table>
+ <tr><th>この頁が積んでいる wasm</th><td id="sz">—</td></tr>
+ <tr><th>seam</th><td><code>step(i64)→i64</code> ＋ <code>memory</code></td></tr>
+ <tr><th>JS が状態を読む方法</th><td><code>BigInt64Array(memory.buffer)</code></td></tr>
+</table>
+
+<div class="note">
+ これが <b>既存の web / app 開発への接点</b>。React でも素の JS でも、読むのは
+ <code>engine_seam.json</code> だけ —— <b>言語側に DOM も HTML も足していない</b>。
+ melon engine の三原則(状態は言語 / 入力は source 非依存の event / 出力は projection)を
+ そのまま web に写しただけ。<code>ev</code> は人のクリックでも agent の判断でも同じ形で届く。
+</div>
+</main>
+<script>
+const B="AGFzbQEAAAABBgFgAX4BfgMCAQAFAwEAAQcRAgRzdGVwAAAGbWVtb3J5AgAKVwFVAQJ+QQApAwAgAHxCClGtQgBSBH5CAAVBACkDACAAfAshAUEAKQMAIAB8QgpRrUIAUgR+QQgpAwBCAXwFQQgpAwALIQJBACABNwMAQQggAjcDACABCw==";
+const bin=Uint8Array.from(atob(B),c=>c.charCodeAt(0));
+document.getElementById("sz").textContent=bin.length+" B";
+let st=null, mem=null;
+function render(){
+  const total=Number(mem[0]), wraps=Number(mem[1]);
+  document.getElementById("total").textContent=total;
+  document.getElementById("wraps").textContent=wraps;
+  const d=document.getElementById("dots"); d.innerHTML="";
+  for(let i=0;i<10;i++){
+    const e=document.createElement("div"); e.className="dot"+(i<total?" on":""); d.appendChild(e);
+  }
+  document.title=`total=${total} wraps=${wraps}`;
+}
+WebAssembly.instantiate(bin).then(({instance})=>{
+  st=instance.exports.step; mem=new BigInt64Array(instance.exports.memory.buffer);
+  const send=(n)=>{ st(BigInt(n)); render(); };
+  document.getElementById("b1").onclick=()=>send(1);
+  document.getElementById("b3").onclick=()=>send(3);
+  document.getElementById("br").onclick=()=>{ mem[0]=0n; mem[1]=0n; render(); };  // 状態の持ち主は host
+  window.__send=send;                       // 秤(playwright)から叩くための口
+  render();
+}).catch(e=>{document.getElementById("total").textContent="wasm 失敗: "+e;});
+</script>

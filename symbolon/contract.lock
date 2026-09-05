@@ -1,0 +1,16 @@
+# 契約の錠 —— 昇格の条件③「契約を変えていない」を **機械で** 判定するための版と指紋。
+#
+# ⚠️ 変えるときは **版を上げる**。黙って指紋だけ書き換えない —— それは契約を黙って広げること。
+# ⚠️ ここに在るのは *契約* だけ。実装(床・特殊化器・backend)は何本増えても版は動かない。
+#    版が動くのは「何が約束されているか」が変わった時だけ。
+#
+# 生成元(この三つは決定的 —— 二度生成して byte 一致を実測、2026-09-04):
+#   machine.json / cases.json … python3 floor_emit.py
+#   engine_seam.json          … floor_ladder --engine
+#
+version 1.0.0
+ops 14
+cases 11
+sha256 machine.json      33d727261023c469e81f63e266ba480a11195a4e05551c3e8d707db16f6776bd
+sha256 cases.json        fead311bd0c9ff792f3434d51988977d3188e552816e556499d429e617b211eb
+sha256 engine_seam.json  05bfffaeb2f52de4f76a2f944c695fb409c1eaa82bf8b758caef08ef4e00c3a5
