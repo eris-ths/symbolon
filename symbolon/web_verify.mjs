@@ -3,7 +3,7 @@
 // 二段で確かめる: (1) node で wasm を直に instantiate、(2) **実 Chromium** で HTML を開く。
 // 見た目を信じない(#5 の「黄色バグ」の教訓)—— 頁が出したテキストを読んで突き合わせる。
 //
-//   node web_verify.mjs        # lab/ で。compiled.wasm / kokkos-compiled.html を読む
+//   node web_verify.mjs        # symbolon/ で。compiled.wasm / demo-compiled.html を読む
 //   (先に: rustc -O floor_ladder.rs -o /tmp/fl && /tmp/fl --web)
 
 import { readFileSync, existsSync } from "node:fs";
@@ -42,7 +42,7 @@ console.log(`node   : run() = ${r} (期待 ${expect}) ${nodeOk ? "✓ 一致" : 
 console.log(`         wasm ${bin.length} B / ${best.toFixed(4)} ms = ${(best * 1e6 / N).toFixed(1)} ns/反復`);
 
 // ---- (2) 実 Chromium で HTML を開く ------------------------------------------
-const htmlPath = join(here, "kokkos-compiled.html");
+const htmlPath = join(here, "demo-compiled.html");
 // ESM の import は NODE_PATH を見ない ⇒ createRequire で解決してから読む。
 let pw = null;
 try {

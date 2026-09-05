@@ -53,3 +53,5 @@ README/wasm/cons	symbolon/README.md	| wasm with a bump heap (cons-heavy) | **⟦
 README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦187⟧ B** |	ladder	機械語 (\d+) B
 README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦133⟧ B** |	engine	wasm (\d+) B
 README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B
+README/頭/wasm	symbolon/README.md	**⟦100⟧-byte** wasm	web	wasm (\d+) B
+README/頭/比	symbolon/README.md	falls by **⟦407⟧×**	ladder	段E は \d+ 個。\*\*(\d+) 分の 1

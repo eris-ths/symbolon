@@ -31,7 +31,7 @@ if (mismatch) { bad++; console.log("node    : ✗ 不一致", JSON.stringify(mis
 else console.log(`node    : ${evs.length} 歩すべて真値と一致 ✓（最終 total=${final.total} wraps=${final.wraps}, wasm ${bin.length} B）`);
 
 // ---- (2) 実 Chromium を本物のクリックで駆動 -----------------------------------
-const htmlPath = join(here, "kokkos-engine.html");
+const htmlPath = join(here, "demo-engine.html");
 let pw = null;
 try {
   const { createRequire } = await import("node:module");

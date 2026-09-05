@@ -1,13 +1,31 @@
 # symbolon
 
-**A contract written as data. An interpreter folded into the program it runs.**
+**Every application grows a small interpreter.** Feature-flag conditions, validation rules,
+pricing logic, search filters, workflow steps — each one ends up as a JSON tree plus a
+hand-written function that walks it. That walker re-reads the same tree on every call, grows a
+new `case` every sprint, gets rewritten once per platform, and the copies drift apart.
 
-`symbolon` (Greek σύμβολον — a tally broken in two, matched later to prove it is genuine)
-is the shared middle of several small languages. It is three things:
+`symbolon` replaces it with two moves.
 
-- a **14-instruction contract**, expressed as data rather than prose,
-- a **specializer** that collapses an interpreter against one program (first Futamura projection),
-- **five back-ends** that emit standalone artifacts — no LLVM, no emscripten, no runtime.
+1. **Write the meaning as data, not as a `switch`.** The walker stops being something you
+   maintain and becomes something generated from the contract. Five back-ends here were written
+   without reading a single line of the language's implementation — only the contract data.
+2. **Fold the interpreter against one program** — the first Futamura projection, the same
+   operation as `re.compile()` or precompiling a template, applied to a general interpreter.
+   The dispatch disappears; what is left is a straight line for that one program.
+
+Measured: the interpreter's step count falls by **407×**, and the output is a **100-byte** wasm
+module — no LLVM, no emscripten, no runtime, nothing to install.
+
+▲ This is a research vessel, not a product. Read *What this does not do* before adopting it.
+
+`symbolon` — Greek σύμβολον: a tally broken in two, matched later to prove it is genuine. The
+name is the method: everything here is checked by putting two halves together.
+
+**Apache-2.0.** Copyright 2026 eris-ths.
+
+⚠️ Every commit here is authored by `umbra` because **this tree is generated, not written**.
+That is explained at the bottom, and it is the reason the history is short.
 
 > ## Don't trust this README. Run it.
 >
@@ -115,9 +133,15 @@ they drive a real browser and click a real page, not a simulated one.
 It is **generated** from a private working repository, every time, in full. That is why every
 commit here is authored by `umbra`.
 
-- **Do not send pull requests against these files** — the next projection overwrites them.
-- Only files named in a manifest on the other side appear here. Anything not named stays home.
-- Issues and discussion are welcome; they are read by the people on the other side.
+**How to contribute, given that.**
+
+- **Open an issue.** They are read, and they are the normal path — a finding, a question, a
+  disagreement with a number all land better here than as a diff.
+- **Send a patch in the issue** if you have one. It gets applied on the source side and arrives
+  here in the next projection, with attribution. ⚠️ A pull request against these files cannot be
+  merged: the next projection would overwrite it.
+- Only files named in a manifest on the source side appear here. Anything not named stays home,
+  which is why some paths mentioned in the Japanese notes do not exist in this tree.
 
 `COMMON.md` is the working notebook — the chronicle, in Japanese, published as-is rather than
 translated. A translation is one more thing that can silently drift, and we would not be able to

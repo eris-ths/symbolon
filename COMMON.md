@@ -77,7 +77,7 @@
 
 ### 1-2. 🔴 反証テスト —— 「407x は整数ループの数字だろう」を壊しに行った
 
-**予想は `lab/probe_emit.py` の冒頭に、撃つ前に書いてある**(git が日付を持つ)。
+**予想は `probe_emit.py` の冒頭に、撃つ前に書いてある**(git が日付を持つ)。
 
 - **407x は整数ループの数字ではなかった。** 閉包 **411** / cons **426** / 整数ループ **407** ——
   **値の種類にほぼ依らない**。塔(機械を解釈する厚み)は値の形と無関係なので、畳めば同じだけ消える。
@@ -129,7 +129,7 @@ literal に達成済み**で、`[cost] instrs= hostcalls= mempeak=` を **seed �
 
 ### 1-7. 🔴 A(P) —— 底までの距離は、解釈の軸ではゼロだった(十段目)
 
-**予想は撃つ前に `lab/icount.sh` の頭へ書き、単独で commit してから測った**(秤 八条 #1)。
+**予想は撃つ前に `symbolon/icount.sh` の頭へ書き、単独で commit してから測った**(秤 八条 #1)。
 
 | ROM | byte-walk | **collapse = A(P)** | 比 |
 |---|---|---|---|
@@ -307,7 +307,7 @@ cd symbolon && rustc -O floor_ladder.rs -o /tmp/fl
 | Boost | ここでの実体 | いま |
 |---|---|---|
 | 育成場 | `experiments/`(third / fourth / fifth / `lab/`) | ✅ 掟「種であって言語でない。器を先に作らない」 |
-| **昇格試験** | **`lab/promote.sh`(六門)** | ✅ **十一段で機械になった**(下記) |
+| **昇格試験** | **`symbolon/promote.sh`(六門)** | ✅ **十一段で機械になった**(下記) |
 | 標準 | 14-op 契約 + 値モデルの整数域 + object tag 表 + engine seam | ✅ **`lab/contract.lock` で版と指紋が付いた**(v1.0.0) |
 | 昇格先 | 共通の**床**・**特殊化器**・**投影の型** | ✅ **`symbolon/`**（2026-09-04 命名）。⚠️ **まだ空** —— 試験が保留なので住んでいない |
 
@@ -479,13 +479,13 @@ cd symbolon && rustc -O floor_ladder.rs -o /tmp/fl
 |---|---|
 | 床A→D / 段E(特殊化・**非 escape 閉包の inline**)/ 段F(x86-64 JIT)/ 段G・**段G′(値の形を静的に推し pair を線形メモリへ)**・**段G″(`--own`/`--own2` = 一意所有で回収)**/ 段H(`--engine`)/ `--probe` | `lab/floor_ladder.rs` |
 | 畳みを V8 で測る二点目 | `lab/floor_ladder.mjs` |
-| 反証テストの素材(**撃つ前の予想がここに書いてある**)/ 走り続ける器 `probe_life` | `lab/probe_emit.py` |
+| 反証テストの素材(**撃つ前の予想がここに書いてある**)/ 走り続ける器 `probe_life` | `probe_emit.py` |
 | 段H の素材と **kokkos の機械が出した真値の軌跡** | `lab/engine_emit.py` |
 | 段G の秤 / 段H の秤(**実 Chromium の本物のクリック**)/ 段G′ の秤(温めてから測る・線形性) | `lab/web_verify.mjs` / `lab/engine_verify.mjs` / `lab/probe_run.mjs` |
-| **合流の門番(姉妹実験 exp/03 の決定的な icount + A(P)。写さず指す)** | `lab/icount.sh` |
+| **合流の門番(姉妹実験 exp/03 の決定的な icount + A(P)。写さず指す)** | `symbolon/icount.sh` |
 | **昇格試験(七門。落ちえることを実測済み)/ 契約の錠(版と指紋)** | `lab/promote.sh` / `lab/contract.lock` |
 | **主張と門番の突き合わせ(門⑦。台帳 / 免除表)** | `lab/claims.py` / `lab/claims.tsv` / `lab/claims.skip` |
-| 生成物 | `lab/kokkos-compiled.html` / `lab/kokkos-engine.html` / `lab/engine_seam.json` |
+| 生成物 | `symbolon/demo-compiled.html` / `symbolon/demo-engine.html` / `symbolon/engine_seam.json` |
 
 ▲ 束縛規則(env→スロット / box→スカラ / 閉包→inline / 死んだ確保を出さない)は段E と段G/H で**二度書いている**。
 制御流れの形が違うため back-end を分けた —— **ズレは秤が捕まえる**(同じ答えを出すまで進めない)。

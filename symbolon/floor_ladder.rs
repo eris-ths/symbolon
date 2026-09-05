@@ -1202,9 +1202,9 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
 }}).catch(e=>{{document.getElementById("out").textContent="wasm 失敗: "+e;}});
 </script>
 "#, n = n, exp = show(&expect), b64 = b64(&module));
-        fs::write("kokkos-compiled.html", &html).unwrap();
+        fs::write("demo-compiled.html", &html).unwrap();
         println!("段G: 程式 → wasm {} B(外部 toolchain ゼロ)/ 自己完結 HTML {} B", module.len(), html.len());
-        println!("  → lab/compiled.wasm と lab/kokkos-compiled.html。検証: node web_verify.mjs");
+        println!("  → compiled.wasm と demo-compiled.html。検証: node web_verify.mjs");
         return;
     }
 
@@ -1429,10 +1429,10 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
 }}).catch(e=>{{document.getElementById("total").textContent="wasm 失敗: "+e;}});
 </script>
 "#, wrap = wrap, b64 = b64(&module));
-        fs::write("kokkos-engine.html", &html).unwrap();
+        fs::write("demo-engine.html", &html).unwrap();
         println!("段H: step 式 ×2 → wasm {} B / seam engine_seam.json / 自己完結 HTML {} B",
                  module.len(), html.len());
-        println!("  → lab/kokkos-engine.html。検証: node engine_verify.mjs(node 再演 + 実 Chromium のクリック)");
+        println!("  → demo-engine.html。検証: node engine_verify.mjs(node 再演 + 実 Chromium のクリック)");
         return;
     }
 
