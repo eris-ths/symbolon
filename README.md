@@ -82,13 +82,19 @@ thing, the tool said another, and both were "right" — it is a time, and times 
 enforced a rule we had written and then broken ourselves.
 
 ▲ These are deterministic counts, not wall-clock. Wall-clock moves between runs and we
-refuse to compare across them — see the eight articles in `COMMON.md` §1.
+refuse to compare across them — see the eight articles in `notes/COMMON.md` §1.
 
 ---
 
 ## Layout
 
 ```
+README.md      this page          notes/COMMON.md   the chronicle (Japanese)
+VERIFY.md      how to check it    notes/DESIGN.md   requirements, read backwards
+MISSES.md      what we got wrong  SECURITY.md       how to report a leak
+
+symbolon/      everything runnable — from here down, run commands inside it:
+
 machine.json   the contract: an interpreter for the object language,
                written in the 14 instructions, as data
 cases.json     the acceptance conditions, as data
@@ -143,10 +149,11 @@ commit here is authored by `umbra`.
 - Only files named in a manifest on the source side appear here. Anything not named stays home,
   which is why some paths mentioned in the Japanese notes do not exist in this tree.
 
-`COMMON.md` is the working notebook — the chronicle, in Japanese, published as-is rather than
+`notes/COMMON.md` is the working notebook — the chronicle, in Japanese, published as-is rather than
 translated. A translation is one more thing that can silently drift, and we would not be able to
-gate it. `DESIGN.md` is its normative counterpart: requirements read backwards out of what was
+gate it. `notes/DESIGN.md` is its normative counterpart: requirements read backwards out of what was
 actually measured.
 
-▲ The runnable material lives in `symbolon/`; this page is a copy placed at the root so the front
-page is legible. The commands above assume you are inside `symbolon/`.
+▲ The published tree is arranged as: this page, `VERIFY.md` and `MISSES.md` at the root; the
+Japanese notes under `notes/`; and everything runnable — contract, floors, specializer, gates —
+under `symbolon/`. The commands above assume you are inside `symbolon/`.

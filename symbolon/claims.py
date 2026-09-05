@@ -35,8 +35,27 @@ FL   = os.environ.get("FL", "/tmp/fl")
 def 正規化(s):
     return re.sub(r"[,\s]", "", s)
 
+def 解決(path):
+    """台帳の道をそのまま試し、無ければ **同じ名前**を木の中から探す。
+    ⚠️ 影では文書の置き場所が変わる（notes/ へ回す）が、名は変えない ⇒ 名で引ければ両方で通る。
+       名を変えたら見つからない。それは正しい —— 名が変わったなら別の文書だから。"""
+    direct = os.path.join(DOCS, path)
+    if os.path.exists(direct):
+        return direct
+    名 = os.path.basename(path)
+    見 = []
+    for d, dirs, fs in os.walk(DOCS):
+        dirs[:] = [x for x in dirs if x not in (".git", ".umbra", "node_modules", "__pycache__")]
+        if 名 in fs:
+            見.append(os.path.join(d, 名))
+    if len(見) == 1:
+        return 見[0]
+    if not 見:
+        sys.exit(f"⛔ 台帳の指す文書が無い: {path}")
+    sys.exit(f"⛔ 同じ名前が {len(見)} 箇所に在る: {path} ⇒ どれが正か決められない")
+
 def 読む(path):
-    with open(os.path.join(DOCS, path), encoding="utf-8") as f:
+    with open(解決(path), encoding="utf-8") as f:
         return f.read()
 
 def 台帳():

@@ -58,7 +58,7 @@ node engine_verify.mjs                       # clicks a real page
 
 ▲ **Instruction counts are deterministic; wall-clock is not.** Times move ±40% between runs on
 the same code. We report ratios only within a single run, and never compare milliseconds
-across runs. The reasoning is in `COMMON.md` §1.
+across runs. The reasoning is in `notes/COMMON.md` §1.
 
 ## The deterministic counter
 
