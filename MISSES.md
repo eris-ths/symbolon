@@ -87,9 +87,43 @@ evidence: shooting `probe_prepend.json` must report `REFUSE str-prepend`, and
 
 ---
 
+## 6. "The stages agree, so the compiler is right"
+
+**Measured: one stage was wrong about a shape the others never disagreed on.**
+
+Nesting a `cons` in the *tail* of another `cons` — `car(cons(300, cons(2, nil)))` — gives
+`300` at the interpreter, `300` at the specialising stage, `300` at the JIT, and **`2`** at
+the wasm stage. Nothing crashed.
+
+The cause is one line: the compiler kept the head of a pair in a **single scratch local shared
+by every `cons` in the program**. Emitting the tail runs the inner `cons`, which overwrites it.
+Nesting has been in the source language since its first day; the compiler had put a local value
+in a global box.
+
+🔴 This had shipped, and every gate was green. The gates that shoot this stage run four
+programs, and not one of them nests a `cons` in a tail. **A gate covers the programs it runs,
+not the language it was written for.**
+
+▲ The line that would have caught it was already on screen. The ladder's summary compares the
+interpreter, the specialiser and the JIT; the wasm stage is not in it, and since the previous
+entry it says so out loud. Renaming that line added no coverage — it made the missing coverage
+*nameable*. This is the entry that used the name.
+
+The nested case is now a probe of its own, and the gate shoots it twice: once to fold it, and
+once to run the wasm that came out — `node probe_run.mjs probe_nest.wasm 702`. Before the fix
+that run returns `6`; after it, `702`. The same run reports a heap peak of `9 cells` for what
+is a three-cell list walked three times: the compiler does not share subexpressions, and now
+that is written down instead of assumed.
+
+▲ Removing the dead helper named in entry 5 left a second one behind — a wrapper the compiler
+never called. `rustc` had been printing `dead_code` for it the whole time, under a build whose
+output we only ever checked for the word `error`.
+
+---
+
 ## Misses of a different kind
 
-The five above are predictions about the system. These are about us, and they recur:
+The six above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|
@@ -99,6 +133,7 @@ The five above are predictions about the system. These are about us, and they re
 | a capability was asserted because the tool appeared in a list; it returned 403 | **A tool existing and a tool working are different questions.** |
 | a gate's own patterns were written without ever running that gate; three of them were wrong | **The contents of a gate you have never fired are unverified.** |
 | a summary line read "all stages agree" while one of the stages had never been run | **A check must not claim more ground in its name than it covers in its body.** |
+| a compiler warning had been printing on every build for as long as anyone could remember | **A warning nobody reads is not a warning. Build clean, or it is decoration.** |
 
-◆ All six are the same shape: **existing and working are different.** The gates in this
+◆ All seven are the same shape: **existing and working are different.** The gates in this
 repository exist because of them.

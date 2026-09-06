@@ -39,7 +39,7 @@
 //   Ins / 床D run_d・count_d              … 線形命令列(count_d は計器。計測とは別建て)
 //   Op / Comp / run_e / jit / Jitted      … 段E(特殊化)と段F(x86-64 を直に吐く)
 //   Kind / scan_owned / WComp             … 段G′(形)と段G″(寿命)。wasm を直に吐く
-//   wasm_module / wasm_engine_module      … module の byte を組む(外部 toolchain ゼロ)
+//   wasm_module_d / wasm_engine_module    … module の byte を組む(外部 toolchain ゼロ)
 //   main の分岐                            … 既定=梯子A→F / --probe / --web / --engine
 //
 // ── 走らせ方 ────────────────────────────────────────────────────────────
@@ -973,7 +973,13 @@ impl WComp {
             }
             8 => { // cons —— bump heap に 16 B 積む。**これが段G′ の芯**
                 let a = self.emit_val(pcar(arg))?; Self::want(Kind::Int, a, "cons の car")?;
-                let (hp, ta, td) = self.heap_locals();
+                let (hp, _, _) = self.heap_locals();
+                // ⚠️ 控えは **cons の site ごとに取る**。一組を全 site で使い回すと、
+                //    cdr 側に入れ子の cons が来た時に *内側が外側の car を潰す*。
+                //    実測 2026-09-05: `car(cons(300, cons(2, nil)))` が 300 でなく **2** を返した。
+                //    落ちない・床D/段E/段F は 300 で揃う ⇒ 段G′ だけが静かに間違える形だった。
+                //    ◆ 局所の値を **大域の器**に置いたのが根。入れ子は言語の側に元から在る。
+                let (ta, td) = (self.slot(), self.slot());
                 self.op_u(0x21, ta);                                                       // local.set $ta
                 let d = self.emit_val(pcdr(arg))?;
                 if d == Kind::Str {
@@ -1162,7 +1168,10 @@ fn section(id: u8, content: Vec<u8>, out: &mut Vec<u8>) {
 }
 
 /// 完全な wasm module を組む(export "run": () -> i64)。
-fn wasm_module(body: &[u8], nlocals: u32, pages: Option<u32>) -> Vec<u8> { wasm_module_d(body, nlocals, pages, &[]) }
+// ⚠️ ここに `wasm_module`(= 池なしで module を組む薄い包み)が在った。**一度も呼ばれていなかった**。
+//    `listish` と同じ型 —— 呼ばれない関数は、在るだけで「そういう道が在る」と読ませる。
+//    池が空でも `wasm_module_d(&[])` で足りる ⇒ 包みは要らなかった。rustc の dead_code が
+//    ずっと鳴っていたのに、warning を見ていなかった(2026-09-05 に気づいた)。
 
 /// ⚠️ data section(11)は code(10)の **後ろ**。節の順を違えると読み手が拒む。
 fn wasm_module_d(body: &[u8], nlocals: u32, pages: Option<u32>, pool: &[u8]) -> Vec<u8> {
