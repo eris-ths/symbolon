@@ -198,9 +198,65 @@ written when something needs it, not before.
 
 ---
 
+## 9. "Register allocation is worth several times"
+
+**Measured: 1.37×.**
+
+The ladder's own summary had been saying, since the JIT was written, that stage F was a naive
+stack-machine translation with `push`/`pop` left in, and that *register allocation would still
+be worth several times*. That sentence printed on every run and had never been shot.
+
+Keeping only the top of the operand stack in a register — one slot, spilled at every label so
+the two sides of a branch agree — removes almost all of the `push`/`pop` traffic. The integer
+loop went from `187 bytes` of machine code to `166 bytes`, and from 0.0055 ms to 0.0040 ms.
+That is a real win and it is not several times.
+
+🔴 The claim was not wrong about the mechanism, it was wrong about the **cost centre**. The
+stack traffic was never the dominant term; local variables still make a round trip to memory
+through `rdi` on every read and write. "Several times" describes real register allocation,
+which pins locals to registers — the part not built. The summary now says which part is done
+and which is not.
+
+▲ The number `187` appeared in six places. Three were the current byte count (a table, a
+sentence, and an ASCII diagram); three were history or an unrelated value. This is entry 1's
+type, and the only reason it did not repeat is that all six were read before any were changed.
+
+---
+
+## 10. "The gates cover the claims"
+
+**Measured: they covered the numbers. The entrance page said the wrong thing for two days.**
+
+The README carries a section called *What this does not do*, and its first line read: "No
+strings. Integers and lists of integers only. Adding strings is the next rung." Strings had
+landed two days earlier, with probes, refusals and gated measurements. Nothing rang.
+
+🔴 The reason is structural, not careless. The claims gate re-derives every **number** in the
+documents from the tool that produced it, and refuses to accept an unexplained one. A sentence
+about a *capability* carries no number, so it sat outside the ratchet entirely — in the one
+section whose whole value is being trustworthy about limits.
+
+▲ It was reaching readers. Asked to summarise the live page, a reader came back with "it
+handles only integers and integer lists". The stale line was not merely present; it was working.
+
+Two changes, and the second is the one that matters.
+
+- The section was rewritten so each limit names something a gate shoots: the string limit now
+  cites the refusal marker `REFUSE str-prepend-nonbyte`, and the self-sufficiency limit cites
+  `NOIMPORT ok`, which the emitter prints only after scanning its own output for an import
+  section — an absence turned into a thing that must be present.
+- A fourth check was added: in a section declared as needing anchors, every bullet must contain
+  a sentence the ledger names, or be listed as unanchored with a reason. Restoring the old "No
+  strings" line makes the run fail; the current text passes.
+
+◆ **A ratchet only holds the shape it was cut for.** This one was cut for numbers, so prose
+walked straight past it for as long as the prose was wrong.
+
+---
+
 ## Misses of a different kind
 
-The eight above are predictions about the system. These are about us, and they recur:
+The ten above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|

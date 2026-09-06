@@ -67,7 +67,7 @@ These appear throughout. They are load-bearing, not decoration.
 |---|---|
 | wasm (integer loop / closure) | **100 B** / **107 B** |
 | wasm with a bump heap (cons-heavy) | **226 B** |
-| x86-64 machine code, hand-encoded, `mmap` + W^X | **187 B** |
+| x86-64 machine code, hand-encoded, `mmap` + W^X | **166 B** |
 | engine module (state + `step`) | **133 B** |
 | self-contained HTML, wasm inlined as base64 | **2,694 B** |
 
@@ -127,10 +127,21 @@ they drive a real browser and click a real page, not a simulated one.
 
 ## ▲ What this does not do
 
-- **No strings.** Integers and lists of integers only. Adding strings is the next rung.
-- **No calls out.** The emitted module exports; it imports nothing. It cannot reach a host.
+⚠️ Every line below is anchored on something a gate shoots, or is listed as unanchored with a
+reason. A limit stated in prose goes stale silently — this section said "no strings" for two
+days after strings landed, and no gate rang, because gates only watched the numbers.
+
+- **No string type.** A string is a list of small integers; the language gained no new form and
+  the contract did not move. A literal is packed one byte per character and read in place, and
+  putting an arbitrary integer in front of one is refused rather than truncated — the gate
+  requires that refusal to appear as `REFUSE str-prepend-nonbyte`.
+- **No calls out.** The emitted module exports and imports nothing, so it cannot reach a host.
+  The emitter scans its own output and must report `NOIMPORT ok`; break it and the run exits
+  non-zero rather than going quiet.
 - **No surface syntax.** Programs arrive encoded. A front-end is deliberately out of scope.
+  ▲ Unanchored: a scope decision, not a measurement. Nothing to shoot.
 - **Not the fastest thing available.** It is the smallest thing that can be checked end to end.
+  ▲ Unanchored: a stance about what is being optimised. Nothing to shoot.
 
 ---
 

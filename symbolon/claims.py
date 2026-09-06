@@ -82,6 +82,23 @@ def 建てる():
     "icount":    (["bash", "icount.sh"],                             ("env", "ERIS_EXP03")),
 }
 
+# 🔴 **錨の要る節**(2026-09-06)。関門③ は *量* しか見ない ⇒ **散文で書かれた能力の主張**は
+#    台輪の外に在って、古くなっても誰も鳴らない。
+#    実測: 公開 README の「No strings」が、文字列を入れた **二日後も**残っていた。
+#    外から生ページを読ませたら「integers and integer lists しか扱わない」と要約された ——
+#    ⇒ 読み手が実際に誤解する所まで届いていた。数だけ守っても、入口は守れていなかった。
+# ◆ 直し方: 限界を並べる節の **各項に錨を要る**。錨とは「台帳の行が名指す一文」で、
+#   その行は門を撃って一致することを要る ⇒ *散文が門に裏打ちされる*。
+# ⚠️ 錨を持てない項は在る（scope の決めごと・立場）。**消さずに、理由付きで免除**する ——
+#   claims.skip と同じ作法。「錨が無い」ことを文書自身にも書かせる(▲ Unanchored:)。
+錨の要る節 = [("symbolon/README.md", "## ▲ What this does not do")]
+
+錨の免除 = {
+    # 節の項の **先頭の太字**をそのまま鍵にする。⚠️ 文言を変えたら外れる —— それは正しい（別の主張だから）
+    "No surface syntax.": "scope の決めごと。測る対象が無い",
+    "Not the fastest thing available.": "何を最適化していないかの立場。測る対象が無い",
+}
+
 壊れた = object()          # 撃ったが落ちた。⚠️ skip ではない —— 隠すと「静かに通る」へ繋がる
 
 def 正規化(s):
@@ -250,6 +267,37 @@ def main():
                     continue
                 未被覆.append((doc, i, tok.strip(), key))
 
+    # ── 関門④ 錨 ─────────────────────────────────────
+    # ⚠️ 判定は **関門③ と同じ述語**を使い回す（「この行は台帳の一文を含むか」）。
+    #    別の判定を書くと、二つの門が別々にずれていく。
+    錨なし = []
+    for doc, 見出し in 錨の要る節:
+        if doc not in doc_cache:
+            doc_cache[doc] = 読む(doc)
+        行 = doc_cache[doc].splitlines()
+        if 見出し not in 行:
+            落ちた.append((f"錨/{doc}", "④錨", f"節が無い: {見出し} ⇒ 節ごと消えたか、名が変わった"))
+            continue
+        i = 行.index(見出し)
+        j = next((k for k in range(i + 1, len(行)) if 行[k].startswith("## ")), len(行))
+        for k in range(i + 1, j):
+            ln = 行[k]
+            if not ln.startswith("- "):
+                continue
+            # 項は次の「- 」まで続く（折り返しを含めて一項として見る）
+            項 = [ln]
+            m = k + 1
+            while m < j and not 行[m].startswith("- ") and not 行[m].startswith("## "):
+                項.append(行[m]); m += 1
+            本文 = "\n".join(項)
+            頭 = re.search(r"^- \*\*(.+?)\*\*", ln)
+            鍵 = 頭.group(1) if 頭 else ln[2:40]
+            if 鍵 in 錨の免除:
+                continue
+            if any(n in 本文 for n in 覆われた.get(doc, [])):
+                continue
+            錨なし.append((doc, k + 1, 鍵))
+
     # ── 判定 ──────────────────────────────────────────
     for cid, 関門, why in 落ちた:
         print(f"  ✗ {cid:<22} {関門}  {why}")
@@ -265,12 +313,18 @@ def main():
             print(f"       … 他 {len(未被覆)-80} 件")
     else:
         print(f"  ③ 被覆        新しい未被覆なし")
+    if 錨なし:
+        print(f"  ④ 錨          ▲ 門に錨づいていない限界 {len(錨なし)} 件:")
+        for doc, i, 鍵 in 錨なし:
+            print(f"       {doc}:{i}  「{鍵}」  ← 台帳の一文を項に入れるか、錨の免除へ理由付きで")
+    else:
+        print(f"  ④ 錨          限界の節は全て門に裏打ちされている({len(錨の免除)} 件は理由付きで免除)")
     print()
     if 飛ばした:
         名 = sorted(set(w for _, w in 飛ばした))
         print(f"  ⚠ 飛ばした: {' / '.join(名)}")
         print( "     ⇒ 飛ばしが在るうちは「文書は門番に裏打ちされている」と言わない。")
-    if 落ちた or 未被覆:
+    if 落ちた or 未被覆 or 錨なし:
         print("\n  ✗ 判定: 文書と門番がずれている")
         return 1
     if 飛ばした:

@@ -101,6 +101,41 @@ impl P {
 }
 fn sof(j: &Json) -> &str { match j { Json::Str(s) => s.as_str(), _ => "" } }
 
+/// # 節タグ —— **値オブジェクト**(2026-09-06)
+///
+/// ⚠️ **契約の 14 op とは別の語彙**。混ぜない:
+///   * **14 op** = `machine.json` が *書かれている* 言語（`lit`/`add`/`car`/`respawn`/…）。
+///     契約はこちら。数えて 14。版が動くのはこれが変わった時だけ。
+///   * **節タグ**(この表) = その機械が *解釈する* 対象言語の節を符号化した番号（0..33）。
+///     符号化は `kokkos` の `enc_expr` が正。ここはその **写し**。
+///
+/// 🔴 なぜ表にしたか。それまでこの file は番号を **69 箇所に直に**書いていて、
+///   意味はコメントだけが持っていた（`== 16` の隣に「// ofn」と書く形）。
+///   ⇒ 遍在言語が散文には在って **型には無い** 状態。DDD で言う primitive obsession で、
+///     実測として効いていた —— 前置の即値判定を書くとき「即値は 0 だったか」を引きに戻った。
+/// ⚠️ ここに番号を **足さない**。足すのは符号化の側（契約）で、写しが先に動いたら嘘になる。
+#[allow(dead_code)]
+mod ntag {
+    pub const LIT: i64 = 0;                 // 即値
+    pub const ADD: i64 = 1;                 // 加
+    pub const SUB: i64 = 2;                 // 減
+    pub const VAR: i64 = 3;                 // 変数参照
+    pub const LET: i64 = 4;                 // 束縛
+    pub const EQ: i64 = 5;                  // 等値
+    pub const IF: i64 = 6;                  // 分岐
+    pub const NIL: i64 = 7;                 // 空リスト
+    pub const CONS: i64 = 8;                // 対を組む(効果位置では文の並び)
+    pub const CAR: i64 = 9;                 // 対の第一
+    pub const CDR: i64 = 10;                // 対の第二
+    pub const PAIRP: i64 = 11;              // 対か
+    pub const OFN: i64 = 16;                // 閉包を作る
+    pub const OAPP: i64 = 17;               // 閉包を適用
+    pub const NEWBOX: i64 = 21;             // 箱を確保
+    pub const GETBOX: i64 = 22;             // 箱を読む
+    pub const SETBOX: i64 = 23;             // 箱を書く
+    pub const WHILE: i64 = 33;              // while
+}
+
 // ---- 値モデル(床A / 床B): Int | Nil | Pair、pair は Rc ----------------------------
 #[derive(Clone)]
 enum V { I(i64), Nil, P(Rc<V>, Rc<V>) }
@@ -477,6 +512,8 @@ fn pnum(j: &Json) -> i64 { match j { Json::Num(n) => *n, _ => panic!("num でな
 
 // ==== 段E/F の目的コード ==========================================================
 #[derive(Clone, Copy)]
+
+
 enum Op {
     Lit(i64), Load(u32), Store(u32), Dup, Pop,
     Add, Sub, Eq, NilV, Cons, Car, Cdr, IsPair,
@@ -504,7 +541,7 @@ impl Comp {
         let id = pnum(pcar(arg));
         let rest = pcdr(arg);
         let val = pcar(rest);
-        if is_p(val) && pnum(pcar(val)) == 16 {        // ofn —— 閉包。コードも slot も出さない
+        if is_p(val) && pnum(pcar(val)) == ntag::OFN {        // ofn —— 閉包。コードも slot も出さない
             let param = pnum(pcar(pcdr(val)));
             let body = pcdr(pcdr(val)).clone();
             self.fns.push((param, body));
@@ -512,7 +549,7 @@ impl Comp {
             return Ok((id, "fn"));
         }
         let s = self.slot();
-        if is_p(val) && pnum(pcar(val)) == 21 {
+        if is_p(val) && pnum(pcar(val)) == ntag::NEWBOX {
             self.emit_val(pcdr(val))?;                 // newbox の初期値
             self.code.push(Op::Store(s));
             self.env.push((id, Bind::Boxed(s)));
@@ -528,7 +565,7 @@ impl Comp {
     /// 呼び先が静的に一つに定まる適用だけを inline する。定まらなければ断る(= escape)。
     fn inline_call(&mut self, arg: &Json) -> Result<(), String> {
         let f = pcar(arg);
-        if !is_p(f) || pnum(pcar(f)) != 3 { return Err("呼び先が var でない(閉包が escape)".into()); }
+        if !is_p(f) || pnum(pcar(f)) != ntag::VAR { return Err("呼び先が var でない(閉包が escape)".into()); }
         let idx = match self.look(pnum(pcdr(f))) {
             Some(Bind::Fn(i)) => i,
             _ => return Err("呼び先が静的に定まらない(閉包が escape)".into()),
@@ -547,7 +584,7 @@ impl Comp {
     }
 
     fn box_slot(&self, h: &Json) -> Result<u32, String> {
-        if !is_p(h) || pnum(pcar(h)) != 3 { return Err("box handle が var でない(escape)".into()); }
+        if !is_p(h) || pnum(pcar(h)) != ntag::VAR { return Err("box handle が var でない(escape)".into()); }
         match self.look(pnum(pcdr(h))) {
             Some(Bind::Boxed(s)) => Ok(s),
             _ => Err("box handle が静的に解けない(escape)".into()),
@@ -560,24 +597,24 @@ impl Comp {
         let tag = pnum(pcar(n));
         let arg = pcdr(n);
         match tag {
-            0 => self.code.push(Op::Lit(pnum(arg))),
-            1 | 2 => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?;
-                       self.code.push(if tag == 1 { Op::Add } else { Op::Sub }); }
-            5 => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Eq); }
-            7 => self.code.push(Op::NilV),
-            8 => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Cons); }
-            9 | 10 | 11 => { self.emit_val(arg)?;                                              // car / cdr / pair?
+            ntag::LIT => self.code.push(Op::Lit(pnum(arg))),
+            ntag::ADD | ntag::SUB => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?;
+                       self.code.push(if tag == ntag::ADD { Op::Add } else { Op::Sub }); }
+            ntag::EQ => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Eq); }
+            ntag::NIL => self.code.push(Op::NilV),
+            ntag::CONS => { self.emit_val(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Cons); }
+            ntag::CAR | ntag::CDR | ntag::PAIRP => { self.emit_val(arg)?;                                              // car / cdr / pair?
                              self.code.push(match tag { 9 => Op::Car, 10 => Op::Cdr, _ => Op::IsPair }); }
-            3 => match self.look(pnum(arg)) {
+            ntag::VAR => match self.look(pnum(arg)) {
                 Some(Bind::Slot(s)) => self.code.push(Op::Load(s)),
                 Some(Bind::Boxed(_)) => return Err("box handle を値として使った(escape)".into()),
                 Some(Bind::Fn(_)) => return Err("閉包を値として使った(escape)".into()),
                 None => return Err(format!("未束縛の var id {}", pnum(arg))),
             },
-            17 => self.inline_call(arg)?,                                                  // oapp
-            16 => return Err("閉包が let の外(名前が付かない ⇒ 呼び先が定まらない)".into()),
-            4 => { self.bind_let(arg)?; self.emit_val(pcdr(pcdr(arg)))?; self.env.pop(); }
-            6 => { // if(c,(t,f))
+            ntag::OAPP => self.inline_call(arg)?,                                                  // oapp
+            ntag::OFN => return Err("閉包が let の外(名前が付かない ⇒ 呼び先が定まらない)".into()),
+            ntag::LET => { self.bind_let(arg)?; self.emit_val(pcdr(pcdr(arg)))?; self.env.pop(); }
+            ntag::IF => { // if(c,(t,f))
                 self.emit_val(pcar(arg))?;
                 let jf = self.here(); self.code.push(Op::Jz(0));
                 self.emit_val(pcar(pcdr(arg)))?;
@@ -586,10 +623,10 @@ impl Comp {
                 self.emit_val(pcdr(pcdr(arg)))?;
                 self.code[je as usize] = Op::Jmp(self.here());
             }
-            22 => { let s = self.box_slot(arg)?; self.code.push(Op::Load(s)); }
-            23 => { let s = self.box_slot(pcar(arg))?;      // setbox は書いた値を返す(kokkos.py:1484)
+            ntag::GETBOX => { let s = self.box_slot(arg)?; self.code.push(Op::Load(s)); }
+            ntag::SETBOX => { let s = self.box_slot(pcar(arg))?;      // setbox は書いた値を返す(kokkos.py:1484)
                     self.emit_val(pcdr(arg))?; self.code.push(Op::Dup); self.code.push(Op::Store(s)); }
-            33 => { // owhile —— 返り値は反復回数(kokkos.py:156)
+            ntag::WHILE => { // owhile —— 返り値は反復回数(kokkos.py:156)
                 let it = self.slot();
                 self.code.push(Op::Lit(0)); self.code.push(Op::Store(it));
                 let top = self.here();
@@ -602,7 +639,7 @@ impl Comp {
                 self.code[jf as usize] = Op::Jz(self.here());
                 self.code.push(Op::Load(it));
             }
-            21 => return Err("newbox が let の外(スカラ置換できない)".into()),
+            ntag::NEWBOX => return Err("newbox が let の外(スカラ置換できない)".into()),
             t => return Err(format!("この切片は tag {} を持たない", t)),
         }
         Ok(())
@@ -614,9 +651,9 @@ impl Comp {
         let tag = pnum(pcar(n));
         let arg = pcdr(n);
         match tag {
-            8 => { self.emit_eff(pcar(arg))?; self.emit_eff(pcdr(arg))?; }   // 死んだ確保を出さない
-            4 => { self.bind_let(arg)?; self.emit_eff(pcdr(pcdr(arg)))?; self.env.pop(); }
-            23 => { let s = self.box_slot(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Store(s)); }
+            ntag::CONS => { self.emit_eff(pcar(arg))?; self.emit_eff(pcdr(arg))?; }   // 死んだ確保を出さない
+            ntag::LET => { self.bind_let(arg)?; self.emit_eff(pcdr(pcdr(arg)))?; self.env.pop(); }
+            ntag::SETBOX => { let s = self.box_slot(pcar(arg))?; self.emit_val(pcdr(arg))?; self.code.push(Op::Store(s)); }
             _ => { self.emit_val(n)?; self.code.push(Op::Pop); }
         }
         Ok(())
@@ -665,61 +702,131 @@ extern "C" {
 const PROT_READ: i32 = 1; const PROT_WRITE: i32 = 2; const PROT_EXEC: i32 = 4;
 const MAP_PRIVATE: i32 = 0x02; const MAP_ANON: i32 = 0x20;
 
-fn op_len(op: &Op) -> Result<usize, String> {
+/// 段F の **一段の register 割付**(top-of-stack caching、2026-09-06)。
+///
+/// それまでの段F は素朴なスタック機械の直訳で、値が動くたびに `push`/`pop` を挟んでいた。
+/// ここでは「オペランドスタックの **頂だけ** を `rax` に載せたまま持ち歩く」——
+/// 一段しか持たないが、`push` して次の命令が即 `pop` する形が支配的なので、これで大半が消える。
+///
+/// ⚠️ **落とし穴は分岐**。ラベルに複数の道から入ってくるので、入口で「頂が rax に在るか」が
+///   食い違うと *静かに間違える*。⇒ **ラベルの手前で必ず吐き出す**（規約: ラベル入口は常に「載っていない」）。
+///   ⚠️ 吐き出す命令は **ラベルより前** に置く。ラベルの中に置くと、飛んできた側がそれを実行する
+///     （rax にはまだ何も無い）⇒ だから `start`(吐き出しの位置)と `label`(飛び先)を別に持つ。
+#[derive(Clone, Copy, PartialEq)]
+struct Tos(bool);          // 頂が rax に載っているか
+
+/// 命令一つの長さを、**入口の状態込み**で返す。⚠️ 状態で長さが変わるので、
+/// 位置を決める周と吐く周で **同じ状態列**を辿らなければならない（`plan` が一度だけ作る）。
+fn op_len(op: &Op, tos: Tos) -> Result<usize, String> {
+    let spill = if tos.0 { 1 } else { 0 };          // push rax
+    let load  = if tos.0 { 0 } else { 1 };          // pop rax(頂を rax へ持ち上げる)
     Ok(match op {
-        Op::Lit(k) => if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 { 8 } else { 11 },
-        Op::Load(_) => 8, Op::Store(_) => 8,
-        Op::Dup => 3, Op::Pop => 4,
-        Op::Add | Op::Sub => 6,
-        Op::Eq => 13,
-        Op::Jz(_) => 10, Op::Jmp(_) => 5,
+        Op::Lit(k) => spill + if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 { 7 } else { 10 },
+        Op::Load(_) => spill + 7,
+        Op::Store(_) => load + 7,
+        Op::Dup => load + 1,
+        Op::Pop => if tos.0 { 0 } else { 4 },       // 載っていれば **捨てるだけ**(命令ゼロ)
+        Op::Add => load + 4,                        // pop rcx; add rax,rcx
+        Op::Sub => load + 7,                        // mov rcx,rax; pop rax; sub rax,rcx
+        Op::Eq  => load + 11,
+        Op::Jz(_) => load + 9,
+        Op::Jmp(_) => spill + 5,
         Op::NilV | Op::Cons | Op::Car | Op::Cdr | Op::IsPair =>
             return Err("段F は整数中核のみ(pair が要る)".into()),
     })
 }
 
-fn jit(code: &[Op]) -> Result<Vec<u8>, String> {
-    // 1 周目: 各命令の byte 位置を決める(長さが確定しているので二周で足りる)
-    let mut at: Vec<usize> = Vec::with_capacity(code.len() + 1);
-    let mut off = 0usize;
-    for op in code { at.push(off); off += op_len(op)?; }
-    at.push(off);                                   // 末尾 = epilogue の位置
+fn next_tos(op: &Op) -> Tos {
+    Tos(match op {
+        Op::Lit(_) | Op::Load(_) | Op::Dup | Op::Add | Op::Sub | Op::Eq => true,
+        Op::Store(_) | Op::Pop | Op::Jz(_) | Op::Jmp(_) => false,
+        _ => false,
+    })
+}
 
+fn jit(code: &[Op]) -> Result<Vec<u8>, String> {
+    // 0 周目: 飛び先を集める。⚠️ 末尾(= epilogue)も飛び先になりうる。
+    let mut targets = std::collections::HashSet::new();
+    for op in code {
+        match op { Op::Jz(t) | Op::Jmp(t) => { targets.insert(*t as usize); }, _ => {} }
+    }
+    // 1 周目: 状態列と位置を決める（長さが状態に依るので、両者を同時に作る）
+    let n = code.len();
+    let mut start = vec![0usize; n + 1];     // 吐き出し(あれば)の位置
+    let mut label = vec![0usize; n + 1];     // **飛び先**(吐き出しの後)
+    let mut tos_in = vec![Tos(false); n + 1];
+    let mut off = 0usize;
+    let mut tos = Tos(false);
+    for i in 0..n {
+        start[i] = off;
+        let spill = tos.0 && targets.contains(&i);
+        if spill { off += 1; tos = Tos(false); }     // push rax —— ラベルの手前で吐き出す
+        label[i] = off;
+        tos_in[i] = tos;
+        off += op_len(&code[i], tos)?;
+        tos = next_tos(&code[i]);
+    }
+    start[n] = off;
+    let end_spill = tos.0 && targets.contains(&n);
+    if end_spill { off += 1; tos = Tos(false); }
+    label[n] = off;
+    tos_in[n] = tos;
+
+    // 2 周目: 同じ状態列を辿って吐く
     let mut b: Vec<u8> = Vec::with_capacity(off + 2);
     let d32 = |v: i32| v.to_le_bytes();
-    for (i, op) in code.iter().enumerate() {
-        match op {
+    for i in 0..n {
+        // ラベルの手前の吐き出し
+        if start[i] != label[i] { b.push(0x50); }                                    // push rax
+        let t = tos_in[i];
+        let load = |b: &mut Vec<u8>| if !t.0 { b.push(0x58); };                      // pop rax
+        match &code[i] {
             Op::Lit(k) => {
+                if t.0 { b.push(0x50); }                                             // push rax(前の頂を落とす)
                 if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 {
-                    b.extend_from_slice(&[0x48, 0xC7, 0xC0]); b.extend_from_slice(&d32(*k as i32)); // mov rax, imm32
+                    b.extend_from_slice(&[0x48, 0xC7, 0xC0]); b.extend_from_slice(&d32(*k as i32));
                 } else {
-                    b.extend_from_slice(&[0x48, 0xB8]); b.extend_from_slice(&k.to_le_bytes());      // movabs rax, imm64
+                    b.extend_from_slice(&[0x48, 0xB8]); b.extend_from_slice(&k.to_le_bytes());
                 }
-                b.push(0x50);                                                                       // push rax
             }
-            Op::Load(s) => { b.extend_from_slice(&[0x48, 0x8B, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8)); b.push(0x50); }
-            Op::Store(s) => { b.push(0x58); b.extend_from_slice(&[0x48, 0x89, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8)); }
-            Op::Dup => b.extend_from_slice(&[0xFF, 0x34, 0x24]),                                     // push [rsp]
-            Op::Pop => b.extend_from_slice(&[0x48, 0x83, 0xC4, 0x08]),                               // add rsp, 8
-            Op::Add => { b.extend_from_slice(&[0x59, 0x58, 0x48, 0x01, 0xC8, 0x50]); }               // pop rcx; pop rax; add rax,rcx; push
-            Op::Sub => { b.extend_from_slice(&[0x59, 0x58, 0x48, 0x29, 0xC8, 0x50]); }               // pop rcx; pop rax; sub rax,rcx; push
-            Op::Eq => { b.extend_from_slice(&[0x59, 0x58, 0x48, 0x39, 0xC8, 0x0F, 0x94, 0xC0,
-                                              0x48, 0x0F, 0xB6, 0xC0, 0x50]); }                      // cmp; sete al; movzx; push
-            Op::Jz(t) => {
-                b.extend_from_slice(&[0x58, 0x48, 0x85, 0xC0, 0x0F, 0x84]);                          // pop rax; test rax,rax; jz rel32
-                let from = at[i] + 10; let to = at[*t as usize];
+            Op::Load(s) => {
+                if t.0 { b.push(0x50); }
+                b.extend_from_slice(&[0x48, 0x8B, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8));
+            }
+            Op::Store(s) => {
+                load(&mut b);
+                b.extend_from_slice(&[0x48, 0x89, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8));
+            }
+            Op::Dup => { load(&mut b); b.push(0x50); }                               // 頂を rax に持ち、控えを積む
+            Op::Pop => { if !t.0 { b.extend_from_slice(&[0x48, 0x83, 0xC4, 0x08]); } }  // 載っていれば捨てるだけ
+            Op::Add => { load(&mut b); b.push(0x59); b.extend_from_slice(&[0x48, 0x01, 0xC8]); }
+            Op::Sub => { load(&mut b);                                               // rax = b
+                         b.extend_from_slice(&[0x48, 0x89, 0xC1]);                   // mov rcx, rax
+                         b.push(0x58);                                               // pop rax = a
+                         b.extend_from_slice(&[0x48, 0x29, 0xC8]); }                 // sub rax, rcx = a-b
+            Op::Eq  => { load(&mut b); b.push(0x59);                                 // pop rcx = a
+                         b.extend_from_slice(&[0x48, 0x39, 0xC8, 0x0F, 0x94, 0xC0,
+                                               0x48, 0x0F, 0xB6, 0xC0]); }
+            Op::Jz(tgt) => {
+                load(&mut b);
+                b.extend_from_slice(&[0x48, 0x85, 0xC0, 0x0F, 0x84]);                // test rax,rax; jz rel32
+                let from = label[i] + op_len(&code[i], t)?; let to = label[*tgt as usize];
                 b.extend_from_slice(&d32(to as i32 - from as i32));
             }
-            Op::Jmp(t) => {
+            Op::Jmp(tgt) => {
+                if t.0 { b.push(0x50); }                                             // 飛ぶ前に吐き出す
                 b.push(0xE9);
-                let from = at[i] + 5; let to = at[*t as usize];
+                let from = label[i] + op_len(&code[i], t)?; let to = label[*tgt as usize];
                 b.extend_from_slice(&d32(to as i32 - from as i32));
             }
             Op::NilV | Op::Cons | Op::Car | Op::Cdr | Op::IsPair =>
                 return Err("段F は整数中核のみ".into()),
         }
     }
-    b.push(0x58); b.push(0xC3);                                                                       // pop rax; ret
+    if start[n] != label[n] { b.push(0x50); }
+    if !tos_in[n].0 { b.push(0x58); }                                                // pop rax(載っていなければ持ち上げる)
+    b.push(0xC3);                                                                     // ret
+    debug_assert_eq!(b.len(), label[n] + if tos_in[n].0 { 1 } else { 2 });
     Ok(b)
 }
 
@@ -776,18 +883,18 @@ fn scan_owned(n: &Json, t: i64, ctx: u8) -> bool {   // ctx: 0=その他 / 1=覗
     let tag = pnum(pcar(n));
     let a = pcdr(n);
     match tag {
-        22 => {                                                    // getbox
-            if is_p(a) && pnum(pcar(a)) == 3 && pnum(pcdr(a)) == t { return ctx != 0; }
+        ntag::GETBOX => {                                                    // getbox
+            if is_p(a) && pnum(pcar(a)) == ntag::VAR && pnum(pcdr(a)) == t { return ctx != 0; }
             scan_owned(a, t, 0)
         }
-        9 | 10 | 11 => scan_owned(a, t, 1),                         // car / cdr / pair?
-        8 => scan_owned(pcar(a), t, 0) && scan_owned(pcdr(a), t, 2), // cons —— cdr 位置だけ移動を許す
-        1 | 2 | 5 | 17 | 23 | 33 => scan_owned(pcar(a), t, 0) && scan_owned(pcdr(a), t, 0),
-        4 => scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
-        6 => scan_owned(pcar(a), t, 0) && scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
-        16 => scan_owned(pcdr(pcdr(a)), t, 0),
-        21 => scan_owned(a, t, 0),
-        0 | 3 | 7 => true,
+        ntag::CAR | ntag::CDR | ntag::PAIRP => scan_owned(a, t, 1),                         // car / cdr / pair?
+        ntag::CONS => scan_owned(pcar(a), t, 0) && scan_owned(pcdr(a), t, 2), // cons —— cdr 位置だけ移動を許す
+        ntag::ADD | ntag::SUB | ntag::EQ | ntag::OAPP | ntag::SETBOX | ntag::WHILE => scan_owned(pcar(a), t, 0) && scan_owned(pcdr(a), t, 0),
+        ntag::LET => scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
+        ntag::IF => scan_owned(pcar(a), t, 0) && scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
+        ntag::OFN => scan_owned(pcdr(pcdr(a)), t, 0),
+        ntag::NEWBOX => scan_owned(a, t, 0),
+        ntag::LIT | ntag::VAR | ntag::NIL => true,
         _ => false,
     }
 }
@@ -880,13 +987,13 @@ impl WComp {
     fn bind_let(&mut self, arg: &Json) -> Result<(), String> {
         let id = pnum(pcar(arg));
         let val = pcar(pcdr(arg));
-        if is_p(val) && pnum(pcar(val)) == 16 {                    // ofn —— 閉包(コードも slot も出さない)
+        if is_p(val) && pnum(pcar(val)) == ntag::OFN {                    // ofn —— 閉包(コードも slot も出さない)
             let param = pnum(pcar(pcdr(val)));
             self.fns.push((param, pcdr(pcdr(val)).clone()));
             self.env.push((id, Bind::Fn((self.fns.len() - 1) as u32)));
             return Ok(());
         }
-        let boxed = is_p(val) && pnum(pcar(val)) == 21;
+        let boxed = is_p(val) && pnum(pcar(val)) == ntag::NEWBOX;
         let k = self.emit_val(if boxed { pcdr(val) } else { val })?;
         let s = self.slot();
         self.op_u(0x21, s);
@@ -926,7 +1033,7 @@ impl WComp {
     }
 
     fn box_slot(&self, h: &Json) -> Result<u32, String> {
-        if !is_p(h) || pnum(pcar(h)) != 3 { return Err("box handle が var でない(escape)".into()); }
+        if !is_p(h) || pnum(pcar(h)) != ntag::VAR { return Err("box handle が var でない(escape)".into()); }
         match self.look(pnum(pcdr(h))) { Some(Bind::Boxed(s)) => Ok(s), _ => Err("box handle が静的に解けない".into()) }
     }
 
@@ -934,7 +1041,7 @@ impl WComp {
     /// ⚠️ これが見抜けなければ「文字列の速い出口」は成立しない(2026-09-05 の予想の難所②)。
     /// 節が **0..255 の即値**なら、その値。詰めた文字列(1 B/要素)へ足せるのはこれだけ。
     fn static_byte(n: &Json) -> Option<i64> {
-        if !is_p(n) || pnum(pcar(n)) != 0 { return None; }
+        if !is_p(n) || pnum(pcar(n)) != ntag::LIT { return None; }
         let v = pnum(pcdr(n));
         if (0..=255).contains(&v) { Some(v) } else { None }
     }
@@ -945,10 +1052,10 @@ impl WComp {
         loop {
             if !is_p(cur) { return None; }
             match pnum(pcar(cur)) {
-                7 => return if out.len() >= 2 { Some(out) } else { None },      // nil で閉じた
-                8 => {
+                ntag::NIL => return if out.len() >= 2 { Some(out) } else { None },      // nil で閉じた
+                ntag::CONS => {
                     let a = pcar(pcdr(cur));
-                    if !is_p(a) || pnum(pcar(a)) != 0 { return None; }          // car が lit でない
+                    if !is_p(a) || pnum(pcar(a)) != ntag::LIT { return None; }          // car が lit でない
                     let v = pnum(pcdr(a));
                     if !(0..=255).contains(&v) { return None; }                 // byte に収まらない
                     out.push(v as u8);
@@ -1048,21 +1155,21 @@ impl WComp {
         let tag = pnum(pcar(n));
         let arg = pcdr(n);
         let k = match tag {
-            0 => { self.op(0x42); let v = pnum(arg); sleb(v, &mut self.b); Kind::Int }     // i64.const
-            1 | 2 => { let a = self.emit_val(pcar(arg))?; let b = self.emit_val(pcdr(arg))?;
+            ntag::LIT => { self.op(0x42); let v = pnum(arg); sleb(v, &mut self.b); Kind::Int }     // i64.const
+            ntag::ADD | ntag::SUB => { let a = self.emit_val(pcar(arg))?; let b = self.emit_val(pcdr(arg))?;
                        Self::want(Kind::Int, a, "add/sub")?; Self::want(Kind::Int, b, "add/sub")?;
-                       self.op(if tag == 1 { 0x7C } else { 0x7D }); Kind::Int }
-            5 => { let a = self.emit_val(pcar(arg))?; let b = self.emit_val(pcdr(arg))?;
+                       self.op(if tag == ntag::ADD { 0x7C } else { 0x7D }); Kind::Int }
+            ntag::EQ => { let a = self.emit_val(pcar(arg))?; let b = self.emit_val(pcdr(arg))?;
                    Self::want(Kind::Int, a, "eq")?; Self::want(Kind::Int, b, "eq")?;
                    self.op(0x51); self.op(0xAD); Kind::Int }                               // i64.eq → extend
-            7 => { self.op(0x42); self.b.push(0x00); Kind::List }                          // nil = 番地 0
-            8 if Self::as_static_str(n).is_some() => {   // 段G‴: 静的な文字列は **詰めて置く**
+            ntag::NIL => { self.op(0x42); self.b.push(0x00); Kind::List }                          // nil = 番地 0
+            ntag::CONS if Self::as_static_str(n).is_some() => {   // 段G‴: 静的な文字列は **詰めて置く**
                 let bytes = Self::as_static_str(n).unwrap();
                 let v = self.intern(&bytes);
                 self.op(0x42); sleb(v, &mut self.b);                                       // i64.const (番地<<32|長さ)
                 Kind::Str
             }
-            8 => { // cons —— bump heap に 16 B 積む。**これが段G′ の芯**
+            ntag::CONS => { // cons —— bump heap に 16 B 積む。**これが段G′ の芯**
                 let a = self.emit_val(pcar(arg))?; Self::want(Kind::Int, a, "cons の car")?;
                 let (hp, _, _) = self.heap_locals();
                 // ⚠️ 控えは **cons の site ごとに取る**。一組を全 site で使い回すと、
@@ -1100,25 +1207,25 @@ impl WComp {
                 self.emit_peak(hp);
                 Kind::List
             }
-            9 | 10 | 11 => {
+            ntag::CAR | ntag::CDR | ntag::PAIRP => {
                 // 先に emit して、返ってきた *形* で分ける。⇒ 先読みの仕掛けが要らない。
                 let x = self.emit_val(arg)?;
                 if x != Kind::Str {
                     Self::want(Kind::List, x, "car/cdr/pair?")?;
                     return Ok(match tag {
-                        9 | 10 => { self.op(0xA7);                                          // i32.wrap
-                                    self.memop(0x29, 0x03, if tag == 9 { 0 } else { 8 });   // i64.load
-                                    if tag == 9 { Kind::Int } else { Kind::List } }
+                        ntag::CAR | ntag::CDR => { self.op(0xA7);                                          // i32.wrap
+                                    self.memop(0x29, 0x03, if tag == ntag::CAR { 0 } else { 8 });   // i64.load
+                                    if tag == ntag::CAR { Kind::Int } else { Kind::List } }
                         _ => { self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }
                     });
                 }
                 // 詰めた文字列の上での car / cdr / pair? —— **セルを一つも触らない**。
                 match tag {
-                    9 => { // car = 先頭の byte。番地 = v >>> 32
+                    ntag::CAR => { // car = 先頭の byte。番地 = v >>> 32
                         self.op(0x42); self.b.push(32); self.op(0x88);                     // i64.const 32 / i64.shr_u
                         self.op(0xA7); self.memop(0x2D, 0x00, 0);                           // i32.wrap / i32.load8_u
                         self.op(0xAD); Kind::Int }                                          // i64.extend_i32_u
-                    10 => { // cdr = (番地+1, 長さ-1)。長さ 0 なら nil(=0)。
+                    ntag::CDR => { // cdr = (番地+1, 長さ-1)。長さ 0 なら nil(=0)。
                         let t = self.tmp_str(); self.op_u(0x22, t);                         // local.tee
                         self.op(0x42); sleb(0xFFFF_FFFFu32 as i64, &mut self.b); self.op(0x7C);  // v + (1<<32) - 1
                         self.op(0x42); self.b.push(0x00);                                   // 偽の枝: nil
@@ -1131,9 +1238,9 @@ impl WComp {
                         self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }
                 }
             }
-            17 => {                                                                        // oapp —— inline
+            ntag::OAPP => {                                                                        // oapp —— inline
                 let f = pcar(arg);
-                if !is_p(f) || pnum(pcar(f)) != 3 { return Err("呼び先が var でない(閉包が escape)".into()); }
+                if !is_p(f) || pnum(pcar(f)) != ntag::VAR { return Err("呼び先が var でない(閉包が escape)".into()); }
                 let idx = match self.look(pnum(pcdr(f))) {
                     Some(Bind::Fn(i)) => i, _ => return Err("呼び先が静的に定まらない(閉包が escape)".into()) };
                 if self.depth >= 8 { return Err("inline が深すぎる".into()); }
@@ -1144,8 +1251,8 @@ impl WComp {
                 self.depth += 1; let r = self.emit_val(&body); self.depth -= 1;
                 self.env.pop(); r?
             }
-            16 => return Err("閉包が let の外".into()),
-            3 => match self.look(pnum(arg)) {
+            ntag::OFN => return Err("閉包が let の外".into()),
+            ntag::VAR => match self.look(pnum(arg)) {
                 Some(Bind::Slot(s)) => { self.op_u(0x20, s); self.slot_kind(s) }
                 Some(Bind::Fn(_)) => return Err("閉包を値として使った(escape)".into()),
                 Some(Bind::Boxed(_)) => return Err("box handle を値として使った(escape)".into()),
@@ -1159,11 +1266,11 @@ impl WComp {
                     }
                 }
             },
-            4 => { self.bind_let(arg)?; let k = self.emit_val(pcdr(pcdr(arg)))?;
+            ntag::LET => { self.bind_let(arg)?; let k = self.emit_val(pcdr(pcdr(arg)))?;
                    // ⚠️ Str も heap を指しうる(段G⁗ の前置) ⇒ **int 以外は持ち出し**扱い。
                    //   list だけ見ていると、回収した番地を長さ付きで持ち歩くことになる。
                    self.close_scope(k != Kind::Int); k }
-            6 => { let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
+            ntag::IF => { let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
                    self.op(0x42); self.b.push(0x00); self.op(0x52);
                    self.op(0x04); self.b.push(0x7E);                                       // if (result i64)
                    let t = self.emit_val(pcar(pcdr(arg)))?;
@@ -1172,11 +1279,11 @@ impl WComp {
                    self.op(0x0B);
                    if t != f { return Err("if の両枝で値の形が違う".into()); }
                    t }
-            22 => { let s = self.box_slot(arg)?; self.op_u(0x20, s); self.slot_kind(s) }
-            23 => { let s = self.box_slot(pcar(arg))?; let want = self.slot_kind(s);
+            ntag::GETBOX => { let s = self.box_slot(arg)?; self.op_u(0x20, s); self.slot_kind(s) }
+            ntag::SETBOX => { let s = self.box_slot(pcar(arg))?; let want = self.slot_kind(s);
                     let k = self.emit_val(pcdr(arg))?; Self::want(want, k, "setbox")?;
                     self.op_u(0x22, s); k }                                                // local.tee(書いた値を返す)
-            33 => {
+            ntag::WHILE => {
                 let it = self.slot(); self.kinds.insert(it, Kind::Int);
                 self.op(0x42); self.b.push(0x00); self.op_u(0x21, it);
                 self.op(0x02); self.b.push(0x40);                                          // block(void) ← depth 1
@@ -1190,7 +1297,7 @@ impl WComp {
                 self.op(0x0B); self.op(0x0B);
                 self.op_u(0x20, it); Kind::Int
             }
-            21 => return Err("newbox が let の外".into()),
+            ntag::NEWBOX => return Err("newbox が let の外".into()),
             t => return Err(format!("この切片は tag {} を持たない", t)),
         };
         Ok(k)
@@ -1201,15 +1308,15 @@ impl WComp {
         let tag = pnum(pcar(n));
         let arg = pcdr(n);
         match tag {
-            8 => { self.emit_eff(pcar(arg))?; self.emit_eff(pcdr(arg))?; }      // 死んだ確保を出さない
-            4 => { self.bind_let(arg)?; self.emit_eff(pcdr(pcdr(arg)))?; self.close_scope(false); }
-            23 => {
+            ntag::CONS => { self.emit_eff(pcar(arg))?; self.emit_eff(pcdr(arg))?; }      // 死んだ確保を出さない
+            ntag::LET => { self.bind_let(arg)?; self.emit_eff(pcdr(pcdr(arg)))?; self.close_scope(false); }
+            ntag::SETBOX => {
                 let s = self.box_slot(pcar(arg))?;
                 // 段G″: `x := cdr(x)` は **消費**。x が一意所有なら、外れた頭を bump heap へ返す。
                 let v = pcdr(arg);
-                let is_consume = is_p(v) && pnum(pcar(v)) == 10
+                let is_consume = is_p(v) && pnum(pcar(v)) == ntag::CDR
                     && { let inner = pcdr(v);
-                         is_p(inner) && pnum(pcar(inner)) == 22
+                         is_p(inner) && pnum(pcar(inner)) == ntag::GETBOX
                          && self.box_slot(pcdr(inner)).map(|s2| s2 == s).unwrap_or(false) };
                 if self.slot_kind(s) != Kind::Int
                    && self.regions.last().map(|(_, bs)| *bs != s).unwrap_or(false) {
@@ -1233,7 +1340,7 @@ impl WComp {
                     self.op_u(0x21, s);
                 }
             }
-            6 => { // if(効果位置)—— block 二枚 + br で書く(0x04 を使わない。上の註と同じ理由)
+            ntag::IF => { // if(効果位置)—— block 二枚 + br で書く(0x04 を使わない。上の註と同じ理由)
                    self.op(0x02); self.b.push(0x40);                            // block L1(抜け先)
                    self.op(0x02); self.b.push(0x40);                            // block L0(else 先)
                    let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
@@ -1261,6 +1368,30 @@ fn section(id: u8, content: Vec<u8>, out: &mut Vec<u8>) {
 //    ずっと鳴っていたのに、warning を見ていなかった(2026-09-05 に気づいた)。
 
 /// ⚠️ data section(11)は code(10)の **後ろ**。節の順を違えると読み手が拒む。
+/// 吐いた module に **import 節(id 2)が在るか**を走査する。
+///
+/// 🔴 「何も import しない = ホストに手が届かない」は README が **限界として** 名乗っている主張。
+///   ⚠️ だがこれは *不在* を根拠にする主張で、崩れた時に黙る側 ——
+///     import を一本足しても、誰も「増えた」と言わない。
+///   ⇒ 吐いた側が **走査して印を出す**（`[NOIMPORT ok]`）。門はその印が *在ること* を要る。
+///     証拠の向きを、不在から在ることへ裏返すための一手（2026-09-06）。
+fn has_import(m: &[u8]) -> bool {
+    let mut i = 8;                                   // magic(4) + version(4)
+    while i < m.len() {
+        let sid = m[i]; i += 1;
+        let (mut n, mut sh) = (0usize, 0u32);
+        loop {
+            if i >= m.len() { return false; }
+            let x = m[i]; i += 1;
+            n |= ((x & 0x7f) as usize) << sh; sh += 7;
+            if x < 0x80 { break; }
+        }
+        if sid == 2 { return true; }
+        i += n;
+    }
+    false
+}
+
 fn wasm_module_d(body: &[u8], nlocals: u32, pages: Option<u32>, pool: &[u8]) -> Vec<u8> {
     let mut m: Vec<u8> = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
     let mut t = Vec::new(); uleb(1, &mut t); t.push(0x60); uleb(0, &mut t); uleb(1, &mut t); t.push(0x7E);
@@ -1402,6 +1533,12 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
 "#, n = n, exp = show(&expect), b64 = b64(&module));
         fs::write("demo-compiled.html", &html).unwrap();
         println!("段G: 程式 → wasm {} B(外部 toolchain ゼロ)/ 自己完結 HTML {} B", module.len(), html.len());
+        // ⚠️ 「何も import しない」を **走査して名乗る**。不在を根拠にする主張は黙って崩れる。
+        if has_import(&module) {
+            println!("  ⛔ 自給が崩れた —— **import 節が在る**。README の限界の一行が嘘になっている");
+            std::process::exit(1);
+        }
+        println!("  自給: 吐いた module に import 節なし —— ホストに手は届かない [NOIMPORT ok]");
         println!("  → compiled.wasm と demo-compiled.html。検証: node web_verify.mjs");
         return;
     }
@@ -1804,9 +1941,16 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
     if jit_res.is_ok() {
         println!("  段F x86-64 直吐き: {:>9.4} ms   結果 {} ({})   機械語 {} B(mmap+W^X、外部 assembler なし)",
                  tf, show(&vf), if f_ok { "一致" } else { "✗ 不一致" }, code_bytes);
-        println!("       ⇒ {:.1} ns/反復 ≈ {:.0} cycles @3GHz。素朴なスタック機械→x86 の直訳(push/pop が残る)",
+        println!("       ⇒ {:.1} ns/反復 ≈ {:.0} cycles @3GHz。頂を rax に載せたまま持ち歩く(一段の割付)",
                  tf * 1e6 / n as f64, tf * 1e6 / n as f64 * 3.0);
-        println!("          ⇒ register 割付をすればまだ数倍。ここは *最後の一絞り* の途中。");
+        // 🔴 予想と実測(2026-09-06)。**予想は消さない**:
+        //   予想「素朴なスタック直訳 ⇒ register 割付をすればまだ **数倍**」
+        //   実測「頂だけを rax に載せる一段の割付で **1.37x**(0.0055 → 0.0040 ms / 187 → 166 B)」
+        //   ⇒ **外れ**。push/pop は消えたが、そこが支配項ではなかった。
+        //     残るのは *局所変数* が毎回メモリを往復している所（Load/Store が rdi 経由のまま）。
+        //     ⇒ 「まだ数倍」は **本物の割付**(局所を register に固定)の話で、頂の一段では届かない。
+        println!("          ⇒ 頂の一段で 1.37x。**まだ数倍**と書いていたが、そこまでは行かない ——");
+        println!("             残りは局所変数が毎回メモリを往復している所(Load/Store)。そこが本物の割付。");
     } else { println!("  {}", jit_note); }
 
     println!("\n  梯子の全景(sum 1..{}):", n);
