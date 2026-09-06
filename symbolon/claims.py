@@ -65,6 +65,10 @@ def 建てる():
     # 🔴 **入れ子の cons**(2026-09-05)。畳むだけの門は壊れていても緑だった
     #    ⇒ この形は **実走まで撃たないと証拠にならない**（下の nest_run が本体）。
     "nest":      ([FL, "--probe", "probe_nest.json"],                 None),
+    # 🔴 **閉包の捕捉**(2026-09-06)。三段が inline 先の env で名前を解いていた。
+    #    ⚠️ 所有の走査は「list の箱」が在る時だけ走る ⇒ **--own2 でも撃つ**（別の穴がそこに在った）。
+    "capture":   ([FL, "--probe", "probe_capture.json"],              None),
+    "cap_own2":  ([FL, "--probe", "probe_capture.json", "--own2"],    None),
     "prepend":   ([FL, "--probe", "probe_prepend.json"],              None),
     "prependw":  ([FL, "--probe", "probe_prependw.json"],             None),
     "strbox":    ([FL, "--probe", "probe_strbox.json"],               None),
@@ -73,6 +77,7 @@ def 建てる():
     "str_run":   (["node", "probe_run.mjs", "probe_str.wasm", "87320"], ("後に", "str")),
     "nest_run":  (["node", "probe_run.mjs", "probe_nest.wasm", "702"], ("後に", "nest")),
     "prep_run":  (["node", "probe_run.mjs", "probe_prepend.wasm", "88020"], ("後に", "prepend")),
+    "cap_run":   (["node", "probe_run.mjs", "probe_capture.wasm", "414"], ("後に", "capture")),
     # 🔴 **書かれた言語の側から撃つ門**(2026-09-06)。手で置いた probe は「思いついた形」しか覆えない
     #    ⇒ 種を固定した差分ファズで、形の方を機械に作らせる。⚠️ 種と本数は決め打ち（再現できないと門にならない）。
     #    ⚠️ 前提は **言語実装が木に在ること**。影には出さない物なので、公開では skip と名乗る

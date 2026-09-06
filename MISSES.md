@@ -221,6 +221,19 @@ and which is not.
 sentence, and an ASCII diagram); three were history or an unrelated value. This is entry 1's
 type, and the only reason it did not repeat is that all six were read before any were changed.
 
+🔴 **Follow-up, same day: the original claim was right and this entry was wrong to close.**
+Having named the cost centre — locals making a round trip through the argument pointer on every
+read — the obvious thing was to fix it. This function calls nothing, so every caller-saved
+register is free; the six busiest slots now live in registers, zeroed on entry because the
+caller only clears the memory array. That is the *actual* register allocation the summary line
+had meant, and pinning them brings it to `122 bytes` from the 166 above, and 0.0040 ms to
+0.0020 ms. Measured end to end against where this entry started: 2.75×.
+
+◆ "Several times" was a correct prediction that two separate measurements disagreed with,
+because both measured something narrower than the claim. **A prediction is not refuted by a
+measurement of a different thing** — and the way to find that out is to build the thing the
+prediction actually described, not to close the entry at the first number.
+
 ---
 
 ## 10. "The gates cover the claims"
@@ -283,9 +296,82 @@ repository refuses everywhere else, reproduced inside the tool built to prevent 
 
 ---
 
+## 12. "The closure probe covers closures"
+
+**Measured: it covered closures that never had their captures shadowed, which is the only case
+that works.**
+
+A closure in this language captures the environment where it is *defined*. The specialiser
+inlines the body at the call site, and it was resolving the body's names against the
+environment *there*. The two agree until a name the body captured is bound again in between:
+
+    let a = 5 ; let f = ofn(q, q + a) ; let a = 90 ; f(1)
+
+The reference floor gives `6`. The specialiser, the JIT and the wasm stage all gave `91`.
+Nothing crashed. The hand-written closure probe exercised closures on every run and never
+rebound anything, so the shape simply never occurred.
+
+🔴 Chasing it turned up a second, unrelated hole in the same region. The ownership scan that
+decides whether a list can be reclaimed destructures a closure node one level too deep — it had
+been written against the shape of a `let`, which nests one deeper than an `ofn`. It reaches that
+code only when a program holds **both** a list in a box and a closure, and no probe held both.
+Under `--own` and `--own2` such a program made the compiler panic outright.
+
+▲ And the fix for the first hole introduced a third. Restoring the caller's environment after
+inlining left the original single `pop` in place, so the call ate one of the caller's bindings;
+`let a=57; let f=…; let a=331; if(f(a), a, …)` returned the old `a` from the branch. The fuzzer
+found it within 60 programs, about ten minutes after the fix was written. **Add cleanup, remove
+the cleanup it replaces** — tidying twice damages the neighbour.
+
+All three are now one probe, shot in three reclaim modes, because the differential fuzzer that
+found them cannot run where this repository is published. Shooting
+`node probe_run.mjs probe_capture.wasm 414` must agree; under `--own2` it must fold and agree on 414. Against the previous
+build that probe reports 499 with no reclaim, and a panic with it.
+
+▲ While writing this entry a ledger number was again taken from the wrong run — a count from
+`--n 150` written next to a gate that shoots `--n 120`. The gate rejected it. That is the third
+time today for the same class of slip, and the only reason none of them shipped.
+
+---
+
+## 13. "Tighten the branch — it is the hottest thing in a loop"
+
+**Measured: the loop had one branch and no comparisons at all.**
+
+The plan for the next tuning pass was to fuse the comparison and the conditional jump, which is
+the textbook peephole. Before writing it, the emitted op stream was counted. In the integer
+benchmark there is exactly **one** `Jz` and **zero** `Eq`. What there is, two or three times per
+program, is a binary operation whose two operands are each a plain load or a literal — and
+between them a `push` and a `pop`, because the stack machine says so and nothing had looked.
+
+Folding those pairs took the integer loop from 0.0020 ms to 0.0009 ms;
+folding those operands brings it to `102 bytes`. The closure probe went to 0.0004 ms and 122
+bytes. Measured against where this thread started: 6.1×, and 187 bytes down to 102.
+
+◆ **A target chosen from intuition is a target chosen from someone else's program.** The
+textbook peephole is right for code that compares; this code mostly moves.
+
+🔴 The first version of the fold segfaulted, then hung. `add rax, imm32` is six bytes and the
+length table said five, so every jump after the first fold pointed one byte short. The bug was
+one constant. The fix was not.
+
+A separate table of instruction lengths has to agree with the emitter that writes those
+instructions, and the two live in different functions. That is the same shape as the memory
+section declared beside its use earlier the same day, and it fails the same way: silently, until
+something jumps. Both passes now go through **one** emitter — the first pass emits with
+placeholder jump targets purely to learn the offsets, and the second emits again with real ones.
+Relative jumps are a fixed width, so the lengths are identical by construction. There is no
+table left to disagree with.
+
+▲ A JIT bug leaves running processes behind. The hung build spun a core for six minutes while
+the next measurement was being taken, which is a good way to record a wrong number about
+something unrelated. Shoot a suspect binary under a timeout.
+
+---
+
 ## Misses of a different kind
 
-The eleven above are predictions about the system. These are about us, and they recur:
+The thirteen above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|

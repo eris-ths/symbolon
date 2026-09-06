@@ -67,7 +67,7 @@ These appear throughout. They are load-bearing, not decoration.
 |---|---|
 | wasm (integer loop / closure) | **100 B** / **107 B** |
 | wasm with a bump heap (cons-heavy) | **226 B** |
-| x86-64 machine code, hand-encoded, `mmap` + W^X | **166 B** |
+| x86-64 machine code, hand-encoded, `mmap` + W^X | **102 B** |
 | engine module (state + `step`) | **133 B** |
 | self-contained HTML, wasm inlined as base64 | **2,694 B** |
 

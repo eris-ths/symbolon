@@ -6,7 +6,7 @@ COMMON.md:300セル	再掲	§1-1 の cons 段E arena(台帳: 段E/cons/arena)
 COMMON.md:50セル	再掲	§1-5 表の値(台帳: 寿命/own・own2 と同じ行の量)
 COMMON.md:407分の1	再掲	台帳: 整数/減り
 COMMON.md:426分の1	再掲	台帳: cons/減り
-COMMON.md:166B	再掲	台帳: 段F/整数/バイト（本文と図の二箇所。⚠️ 表だけ直して本文を残す型は MISSES §1 そのもの）
+COMMON.md:102B	再掲	台帳: 段F/整数/バイト（本文と図の二箇所。⚠️ 表だけ直して本文を残す型は MISSES §1 そのもの）
 COMMON.md:133B	再掲	台帳: 段H/バイト
 COMMON.md:226B	再掲	台帳: 段G′/cons/バイト
 COMMON.md:80命令	再掲	台帳: 回収/region の行が持つ +80
@@ -68,3 +68,19 @@ COMMON.md:192B	再掲	二十八段の表（台帳: 段F/閉包/バイト）
 COMMON.md:1byte	言い回し	二十八段「1 byte も変わらなかった」—— 量ではなく言い回し
 COMMON.md:187B	経緯	二十八段の表の「前」列（割付を入れる前の値）
 COMMON.md:217B	経緯	同上（閉包 probe の割付前）
+COMMON.md:166B	経緯	二十八段の表の「後」列（頂の一段の割付まで。今の値は §1-1 の表が正）
+COMMON.md:192B	経緯	同上（閉包 probe。頂の一段まで）
+COMMON.md:143B	経緯	三十二段の表（register 割付まで）。今の閉包の値は §1-1 の表が正
+symbolon/MISSES.md:166bytes	経緯	§9 が測った値（頂の一段の割付）。今の値は同じ節の続きが持つ
+symbolon/MISSES.md:187bytes	経緯	§9 の出発点（割付を入れる前）。今の値は同じ節の続きが持つ
+symbolon/MISSES.md:2.75×	導出	二つの ms(0.0055 / 0.0020)の比。時間は機に依るので門で固定しない
+COMMON.md:2.75×	導出	二つの ms(0.0055 / 0.0020)の比。時間は機に依るので門で固定しない
+COMMON.md:7byte	構造の定数	x86 の `mov rax,[rdi+disp32]` の符号長（命令の定義。測って出る数ではない）
+COMMON.md:3byte	構造の定数	同 `mov rax,<reg>` の符号長
+COMMON.md:122B	経緯	三十二段の表の整数ループ（割付まで）。⚠️ 今は閉包の値でもある —— 現在値の方は台帳 段F/閉包/バイト が持つ
+symbolon/MISSES.md:122bytes	経緯	§9 の続きが測った値（register 割付まで）。今の値は §13 が持つ
+symbolon/MISSES.md:6.1×	導出	二つの ms(0.0055 / 0.0009)の比。時間は機に依るので門で固定しない
+COMMON.md:6.1×	導出	二つの ms(0.0055 / 0.0009)の比。時間は機に依るので門で固定しない
+COMMON.md:24命令	経緯	三十三段で数えた時点の段F の命令数（当て先を選ぶために数えた値）
+COMMON.md:5byte	経緯	間違って書いた長さ（実際は 6）。**誤りの記録** ⇒ 門で固定しない
+COMMON.md:2byte	導出	`local.set;local.get` を `local.tee` に畳んだ時の差（命令一つ分）。探した結果 *在らなかった* 当て先の見積り

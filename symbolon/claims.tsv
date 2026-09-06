@@ -14,8 +14,8 @@
 cons/減り	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **⟦426⟧ 分の 1** | 39,473 セル | **300** |	cons	= \*\*(\d+) 分の 1\*\*
 床D/cons/arena	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **426 分の 1** | ⟦39,473⟧ セル | **300** |	cons	床D.*?arena (\d+) セル
 段E/cons/arena	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,486 | 9,320 | **426 分の 1** | 39,473 セル | **⟦300⟧** |	cons	段E.*?arena (\d+) セル
-段F/整数/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | ⟦166⟧ B / 192 B |	ladder	機械語 (\d+) B
-段F/閉包/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | 166 B / ⟦192⟧ B |	clos	機械語 (\d+) B
+段F/整数/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | ⟦102⟧ B / 122 B |	ladder	機械語 (\d+) B
+段F/閉包/バイト	COMMON.md	| 段F x86-64(整数ループ / 閉包) | 102 B / ⟦122⟧ B |	clos	機械語 (\d+) B
 段G/整数/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
 段G/閉包/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 段G′/cons/バイト	COMMON.md	| **段G′ wasm(cons が主役 —— pair を線形メモリの bump heap へ)** | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
@@ -50,7 +50,7 @@ README/cons/比	symbolon/README.md	| cons-heavy (build a 300-cell list, fold it)
 README/wasm/整数	symbolon/README.md	| wasm (integer loop / closure) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
 README/wasm/閉包	symbolon/README.md	| wasm (integer loop / closure) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 README/wasm/cons	symbolon/README.md	| wasm with a bump heap (cons-heavy) | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
-README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦166⟧ B** |	ladder	機械語 (\d+) B
+README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦102⟧ B** |	ladder	機械語 (\d+) B
 README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦133⟧ B** |	engine	wasm (\d+) B
 README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B
 README/頭/wasm	symbolon/README.md	**⟦100⟧-byte** wasm	web	wasm (\d+) B
@@ -69,6 +69,8 @@ cons/入れ子/実走	symbolon/MISSES.md	`node probe_run.mjs probe_nest.wasm ⟦
 cons/入れ子/峰	symbolon/MISSES.md	a heap peak of `⟦9⟧ cells`	nest_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 形/ファズ/一致	symbolon/MISSES.md	`--n 120 --seed 20260906 --depth 4` agrees on ⟦351⟧	fuzz	一致 (\d+) / 食い違い 0
 形/ファズ/断り	symbolon/MISSES.md	declining ⟦9⟧ of them	fuzz	食い違い 0 / 断り (\d+)
-段F/割付/バイト	symbolon/MISSES.md	from `187 bytes` of machine code to `⟦166⟧ bytes`	ladder	機械語 (\d+) B
+段F/畳み/バイト	symbolon/MISSES.md	folding those operands brings it to `⟦102⟧ bytes`	ladder	機械語 (\d+) B
 README/限界/str	symbolon/README.md	refusal to appear as `REFUSE ⟦str-prepend-nonbyte⟧`	prependw	段G′ \*\*吐けない\*\*.*\[REFUSE (str-prepend-nonbyte)\]
 README/限界/自給	symbolon/README.md	must report `⟦NOIMPORT⟧ ok`	web	\[(NOIMPORT) ok\]
+閉包/捕捉/実走	symbolon/MISSES.md	`node probe_run.mjs probe_capture.wasm ⟦414⟧`	cap_run	段G′ 実走: (\d+) \(期待 414\) ✓ 一致
+閉包/捕捉/所有	symbolon/MISSES.md	under `--own2` it must fold and agree on ⟦414⟧	cap_own2	秤: 期待 (\d+) と 床D/段E/段F 一致 ✓

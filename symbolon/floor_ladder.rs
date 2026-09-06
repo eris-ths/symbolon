@@ -526,7 +526,11 @@ enum Bind { Slot(u32), Boxed(u32), Fn(u32) }
 //   Fn    = 閉包を **呼び先が静的に一つに定まる時だけ** 束ねた(値として使われたら escape ⇒ 断る)。
 //           コードも slot も出さない —— 適用のたびに body を inline する。
 
-struct Comp { code: Vec<Op>, env: Vec<(i64, Bind)>, nslots: u32, fns: Vec<(i64, Json)>, depth: u32 }
+/// ⚠️ `fns` の三つ目は **定義時の env の長さ**。閉包は *定義した場所* の束縛を捕まえる ——
+///   inline は「body をここへ貼る」ことなので、貼った先の env で名前を解くと **別の値**を読む。
+///   🔴 実測 2026-09-06: `let a=5; let f=ofn(q,q+a); let a=90; f(1)` が
+///     床D では 6、段E/段F/段G′ では **91**。落ちない。手で置いた probe は影を作らないので当たらなかった。
+struct Comp { code: Vec<Op>, env: Vec<(i64, Bind)>, nslots: u32, fns: Vec<(i64, Json, usize)>, depth: u32 }
 
 impl Comp {
     fn new() -> Comp { Comp { code: Vec::new(), env: Vec::new(), nslots: 0, fns: Vec::new(), depth: 0 } }
@@ -544,7 +548,7 @@ impl Comp {
         if is_p(val) && pnum(pcar(val)) == ntag::OFN {        // ofn —— 閉包。コードも slot も出さない
             let param = pnum(pcar(pcdr(val)));
             let body = pcdr(pcdr(val)).clone();
-            self.fns.push((param, body));
+            self.fns.push((param, body, self.env.len()));   // ← **定義時の env** を控える
             self.env.push((id, Bind::Fn((self.fns.len() - 1) as u32)));
             return Ok((id, "fn"));
         }
@@ -571,15 +575,23 @@ impl Comp {
             _ => return Err("呼び先が静的に定まらない(閉包が escape)".into()),
         };
         if self.depth >= 8 { return Err("inline が深すぎる(再帰閉包か)".into()); }
-        let (param, body) = self.fns[idx as usize].clone();
-        self.emit_val(pcdr(arg))?;                     // 実引数
+        let (param, body, elen) = self.fns[idx as usize].clone();
+        self.emit_val(pcdr(arg))?;                     // 実引数(**呼び側の env** で評価する)
         let s = self.slot();
         self.code.push(Op::Store(s));
+        // body は **定義時の env** で解く ⇒ 呼び側の束縛を一旦外し、終わったら戻す
+        let 呼び側 = self.env.split_off(elen);
         self.env.push((param, Bind::Slot(s)));
         self.depth += 1;
         let r = self.emit_val(&body);
+        self.env.truncate(elen);        // ← param もここで落ちる
+        self.env.extend(呼び側);
         self.depth -= 1;
-        self.env.pop();
+        // ⚠️ かつてここに `self.env.pop()` が在った（param を落とすため）。
+        //   復元を足した後も残っていて、**呼び側の束縛を一つ食っていた**。
+        //   実測 2026-09-06: 直した 10 分後に差分ファズが 60 本で掴んだ ——
+        //   `let a=57; let f=…; let a=331; if(f(a), a, …)` が then 枝で古い a を返した。
+        //   ◆ 型: **後始末を足したら、元の後始末を外したか見る。** 二重に片付けると、隣を壊す。
         r
     }
 
@@ -717,23 +729,141 @@ struct Tos(bool);          // 頂が rax に載っているか
 
 /// 命令一つの長さを、**入口の状態込み**で返す。⚠️ 状態で長さが変わるので、
 /// 位置を決める周と吐く周で **同じ状態列**を辿らなければならない（`plan` が一度だけ作る）。
-fn op_len(op: &Op, tos: Tos) -> Result<usize, String> {
-    let spill = if tos.0 { 1 } else { 0 };          // push rax
-    let load  = if tos.0 { 0 } else { 1 };          // pop rax(頂を rax へ持ち上げる)
-    Ok(match op {
-        Op::Lit(k) => spill + if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 { 7 } else { 10 },
-        Op::Load(_) => spill + 7,
-        Op::Store(_) => load + 7,
-        Op::Dup => load + 1,
-        Op::Pop => if tos.0 { 0 } else { 4 },       // 載っていれば **捨てるだけ**(命令ゼロ)
-        Op::Add => load + 4,                        // pop rcx; add rax,rcx
-        Op::Sub => load + 7,                        // mov rcx,rax; pop rax; sub rax,rcx
-        Op::Eq  => load + 11,
-        Op::Jz(_) => load + 9,
-        Op::Jmp(_) => spill + 5,
+/// 段F の **本物の register 割付**(2026-09-06)。
+///
+/// 頂だけを持ち歩く一段の割付では 1.37x しか出なかった。梯子が毎回印字していた「まだ数倍」の
+/// 当て先は **局所変数**で、Load / Store のたびに `rdi` 経由でメモリを往復していた。
+/// ⇒ よく使うスロットを **物理 register に固定**する。7 byte の往復が 3 byte の move になる。
+///
+/// ⚠️ 使ってよい register の根拠: **この関数は何も呼ばない** ⇒ caller-saved は全部自由。
+///   rax は頂、rcx は作業、rdi は引数（固定しなかったスロットの置き場）。残りを固定に回す。
+///   callee-saved(rbx/rbp/r12-r15)は **触らない** —— 保存すれば使えるが、保存を忘れた日に
+///   *呼び元が壊れる*。得より、忘れうる手を置かない方を採る。
+/// ⚠️ 固定した register は **入口で 0 にする**。呼び元はスロット配列を 0 で埋めてから渡すが、
+///   register には何も入っていない ⇒ 書く前に読むと garbage を返す（静かに間違える形）。
+const PIN: [u8; 6] = [2, 6, 8, 9, 10, 11];      // rdx, rsi, r8..r11
+
+/// どのスロットを register に載せるか。使用回数の多い順に PIN の分だけ。
+fn pin_map(code: &[Op]) -> HashMap<u32, u8> {
+    let mut 数: HashMap<u32, usize> = HashMap::new();
+    for op in code {
+        if let Op::Load(s) | Op::Store(s) = op { *数.entry(*s).or_insert(0) += 1; }
+    }
+    let mut v: Vec<(u32, usize)> = 数.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));   // ⚠️ 同数は slot 番号で決める（決定的に）
+    v.into_iter().take(PIN.len()).enumerate().map(|(i, (s, _))| (s, PIN[i])).collect()
+}
+
+fn rex(w_r: bool, r: u8) -> u8 { 0x48 | if r >= 8 { if w_r { 0x04 } else { 0x01 } } else { 0 } }
+/// mov <reg>, rax
+fn mov_r_rax(r: u8, b: &mut Vec<u8>) { b.push(rex(false, r)); b.push(0x89); b.push(0xC0 | (r & 7)); }
+/// mov rax, <reg>
+fn mov_rax_r(r: u8, b: &mut Vec<u8>) { b.push(rex(true, r)); b.push(0x89); b.push(0xC0 | ((r & 7) << 3)); }
+/// xor <reg>, <reg>
+fn xor_rr(r: u8, b: &mut Vec<u8>) {
+    b.push(0x48 | if r >= 8 { 0x05 } else { 0 }); b.push(0x31); b.push(0xC0 | ((r & 7) << 3) | (r & 7));
+}
+
+/// **二項演算の両辺畳み**(2026-09-06)。`Load a; Lit k; Add` のように、
+/// 両辺が「取り出すだけ」の時、間の `push`/`pop` は要らない ——
+/// `mov rax,<a>` の後に `add rax, imm` を直に当てられる。
+///
+/// ⚠️ 当て先は **数えて選んだ**。最初は `Jz`/`Eq` を絞るつもりだったが、吐いた列を数えたら
+///   `Jz` は 1 回、`Eq` は **0 回**。多いのはこの形だった ⇒ **当て先は見立てで選ばない。**
+/// ⚠️ 飛び先を跨いで畳まない —— 飛んできた側が畳んだ命令の途中に落ちる。
+fn 畳める(code: &[Op], i: usize, targets: &std::collections::HashSet<usize>) -> bool {
+    if i + 2 >= code.len() { return false; }
+    if targets.contains(&(i + 1)) || targets.contains(&(i + 2)) { return false; }
+    if !matches!(code[i], Op::Load(_)) { return false; }
+    if !matches!(code[i + 2], Op::Add | Op::Sub) { return false; }
+    match &code[i + 1] {
+        Op::Load(_) => true,
+        Op::Lit(k) => *k >= i32::MIN as i64 && *k <= i32::MAX as i64,
+        _ => false,
+    }
+}
+
+/// 命令一つ（または畳んだ三つ組）を吐く。**長さはここから *出る* もので、別表を持たない。**
+///
+/// 🔴 かつて `op_len` という **長さの表**を別に持っていた。2026-09-06、畳みを足した時に
+///   `add rax, imm32` を 5 byte と書いた（実際は 6）—— 表と実体が一 byte ずれ、
+///   以降の飛び先が全部ずれて **segfault と無限ループ**になった。
+///   ◆ **宣言を使用から導く**（同日、wasm の memory 節で踏んだのと同じ型）。
+///   ⇒ 位置を決める周も、吐く周も、**この一つの口**を通す。表が無ければ、ずれようがない。
+/// ⚠️ 飛び先の値だけは周で変わるが、`rel32` は長さが固定なので **長さは変わらない**。
+fn emit_one(b: &mut Vec<u8>, code: &[Op], i: usize, t: Tos, pins: &HashMap<u32, u8>,
+            fuse: &[u8], label: &[usize], here: usize) -> Result<(), String> {
+    let d32 = |v: i32| v.to_le_bytes();
+    let 取る = |b: &mut Vec<u8>, s: &u32| match pins.get(s) {          // mov rax, <slot>
+        Some(&r) => mov_rax_r(r, b),
+        None => { b.extend_from_slice(&[0x48, 0x8B, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8)); }
+    };
+    if fuse[i] == 2 { return Ok(()); }                                 // 前の畳みが呑んだ
+    if fuse[i] == 1 {
+        if t.0 { b.push(0x50); }                                       // 前の頂を落とす
+        if let Op::Load(a) = &code[i] { 取る(b, a); }
+        let 加 = matches!(code[i + 2], Op::Add);
+        match &code[i + 1] {
+            Op::Lit(k) => { b.extend_from_slice(&[0x48, if 加 { 0x05 } else { 0x2D }]);
+                            b.extend_from_slice(&d32(*k as i32)); }              // add/sub rax, imm32
+            Op::Load(s) => match pins.get(s) {
+                Some(&r) => { b.push(0x48 | if r >= 8 { 0x04 } else { 0 });
+                              b.push(if 加 { 0x01 } else { 0x29 });
+                              b.push(0xC0 | ((r & 7) << 3)); }                   // add/sub rax, reg
+                None => { b.extend_from_slice(&[0x48, if 加 { 0x03 } else { 0x2B }, 0x87]);
+                          b.extend_from_slice(&d32((*s as i32) * 8)); }          // add/sub rax, [rdi+d]
+            },
+            _ => {}
+        }
+        return Ok(());
+    }
+    let load = |b: &mut Vec<u8>| if !t.0 { b.push(0x58); };                      // pop rax
+    match &code[i] {
+        Op::Lit(k) => {
+            if t.0 { b.push(0x50); }
+            if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 {
+                b.extend_from_slice(&[0x48, 0xC7, 0xC0]); b.extend_from_slice(&d32(*k as i32));
+            } else {
+                b.extend_from_slice(&[0x48, 0xB8]); b.extend_from_slice(&k.to_le_bytes());
+            }
+        }
+        Op::Load(s) => { if t.0 { b.push(0x50); } 取る(b, s); }
+        Op::Store(s) => {
+            load(b);
+            match pins.get(s) {
+                Some(&r) => mov_r_rax(r, b),
+                None => { b.extend_from_slice(&[0x48, 0x89, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8)); }
+            }
+        }
+        Op::Dup => { load(b); b.push(0x50); }
+        Op::Pop => { if !t.0 { b.extend_from_slice(&[0x48, 0x83, 0xC4, 0x08]); } }
+        Op::Add => { load(b); b.push(0x59); b.extend_from_slice(&[0x48, 0x01, 0xC8]); }
+        Op::Sub => { load(b); b.extend_from_slice(&[0x48, 0x89, 0xC1]); b.push(0x58);
+                     b.extend_from_slice(&[0x48, 0x29, 0xC8]); }
+        Op::Eq  => { load(b); b.push(0x59);
+                     b.extend_from_slice(&[0x48, 0x39, 0xC8, 0x0F, 0x94, 0xC0, 0x48, 0x0F, 0xB6, 0xC0]); }
+        Op::Jz(tgt) => {
+            load(b);
+            b.extend_from_slice(&[0x48, 0x85, 0xC0, 0x0F, 0x84]);
+            let to = label[*tgt as usize] as i64;
+            b.extend_from_slice(&d32(0)); let n = b.len();
+            let 末 = here + n;                                                    // この命令の終端
+            let rel = to - 末 as i64;
+            b[n - 4..].copy_from_slice(&d32(rel as i32));
+        }
+        Op::Jmp(tgt) => {
+            if t.0 { b.push(0x50); }
+            b.push(0xE9);
+            let to = label[*tgt as usize] as i64;
+            b.extend_from_slice(&d32(0)); let n = b.len();
+            let 末 = here + n;
+            let rel = to - 末 as i64;
+            b[n - 4..].copy_from_slice(&d32(rel as i32));
+        }
         Op::NilV | Op::Cons | Op::Car | Op::Cdr | Op::IsPair =>
             return Err("段F は整数中核のみ(pair が要る)".into()),
-    })
+    }
+    Ok(())
 }
 
 fn next_tos(op: &Op) -> Tos {
@@ -750,84 +880,46 @@ fn jit(code: &[Op]) -> Result<Vec<u8>, String> {
     for op in code {
         match op { Op::Jz(t) | Op::Jmp(t) => { targets.insert(*t as usize); }, _ => {} }
     }
-    // 1 周目: 状態列と位置を決める（長さが状態に依るので、両者を同時に作る）
+    let pins = pin_map(code);
+    let 前口 = 3 * pins.len();
     let n = code.len();
-    let mut start = vec![0usize; n + 1];     // 吐き出し(あれば)の位置
-    let mut label = vec![0usize; n + 1];     // **飛び先**(吐き出しの後)
+    let mut fuse = vec![0u8; n];
+    let mut i = 0usize;
+    while i < n {
+        if 畳める(code, i, &targets) { fuse[i] = 1; fuse[i+1] = 2; fuse[i+2] = 2; i += 3; } else { i += 1; }
+    }
+    // 1 周目 / 2 周目 —— **同じ口で吐く**。1 周目は飛び先が仮（長さは同じ）。
+    let mut label = vec![0usize; n + 1];
+    let mut start = vec![0usize; n + 1];
     let mut tos_in = vec![Tos(false); n + 1];
-    let mut off = 0usize;
-    let mut tos = Tos(false);
-    for i in 0..n {
-        start[i] = off;
-        let spill = tos.0 && targets.contains(&i);
-        if spill { off += 1; tos = Tos(false); }     // push rax —— ラベルの手前で吐き出す
-        label[i] = off;
-        tos_in[i] = tos;
-        off += op_len(&code[i], tos)?;
-        tos = next_tos(&code[i]);
-    }
-    start[n] = off;
-    let end_spill = tos.0 && targets.contains(&n);
-    if end_spill { off += 1; tos = Tos(false); }
-    label[n] = off;
-    tos_in[n] = tos;
-
-    // 2 周目: 同じ状態列を辿って吐く
-    let mut b: Vec<u8> = Vec::with_capacity(off + 2);
-    let d32 = |v: i32| v.to_le_bytes();
-    for i in 0..n {
-        // ラベルの手前の吐き出し
-        if start[i] != label[i] { b.push(0x50); }                                    // push rax
-        let t = tos_in[i];
-        let load = |b: &mut Vec<u8>| if !t.0 { b.push(0x58); };                      // pop rax
-        match &code[i] {
-            Op::Lit(k) => {
-                if t.0 { b.push(0x50); }                                             // push rax(前の頂を落とす)
-                if *k >= i32::MIN as i64 && *k <= i32::MAX as i64 {
-                    b.extend_from_slice(&[0x48, 0xC7, 0xC0]); b.extend_from_slice(&d32(*k as i32));
-                } else {
-                    b.extend_from_slice(&[0x48, 0xB8]); b.extend_from_slice(&k.to_le_bytes());
-                }
-            }
-            Op::Load(s) => {
-                if t.0 { b.push(0x50); }
-                b.extend_from_slice(&[0x48, 0x8B, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8));
-            }
-            Op::Store(s) => {
-                load(&mut b);
-                b.extend_from_slice(&[0x48, 0x89, 0x87]); b.extend_from_slice(&d32((*s as i32) * 8));
-            }
-            Op::Dup => { load(&mut b); b.push(0x50); }                               // 頂を rax に持ち、控えを積む
-            Op::Pop => { if !t.0 { b.extend_from_slice(&[0x48, 0x83, 0xC4, 0x08]); } }  // 載っていれば捨てるだけ
-            Op::Add => { load(&mut b); b.push(0x59); b.extend_from_slice(&[0x48, 0x01, 0xC8]); }
-            Op::Sub => { load(&mut b);                                               // rax = b
-                         b.extend_from_slice(&[0x48, 0x89, 0xC1]);                   // mov rcx, rax
-                         b.push(0x58);                                               // pop rax = a
-                         b.extend_from_slice(&[0x48, 0x29, 0xC8]); }                 // sub rax, rcx = a-b
-            Op::Eq  => { load(&mut b); b.push(0x59);                                 // pop rcx = a
-                         b.extend_from_slice(&[0x48, 0x39, 0xC8, 0x0F, 0x94, 0xC0,
-                                               0x48, 0x0F, 0xB6, 0xC0]); }
-            Op::Jz(tgt) => {
-                load(&mut b);
-                b.extend_from_slice(&[0x48, 0x85, 0xC0, 0x0F, 0x84]);                // test rax,rax; jz rel32
-                let from = label[i] + op_len(&code[i], t)?; let to = label[*tgt as usize];
-                b.extend_from_slice(&d32(to as i32 - from as i32));
-            }
-            Op::Jmp(tgt) => {
-                if t.0 { b.push(0x50); }                                             // 飛ぶ前に吐き出す
-                b.push(0xE9);
-                let from = label[i] + op_len(&code[i], t)?; let to = label[*tgt as usize];
-                b.extend_from_slice(&d32(to as i32 - from as i32));
-            }
-            Op::NilV | Op::Cons | Op::Car | Op::Cdr | Op::IsPair =>
-                return Err("段F は整数中核のみ".into()),
+    let mut out: Vec<u8> = Vec::new();
+    for 周 in 0..2 {
+        out = Vec::with_capacity(256);
+        let mut 順: Vec<u8> = pins.values().cloned().collect();
+        順.sort();
+        for r in 順 { xor_rr(r, &mut out); }
+        debug_assert_eq!(out.len(), 前口);
+        let mut tos = Tos(false);
+        for i in 0..n {
+            start[i] = out.len();
+            if tos.0 && targets.contains(&i) { out.push(0x50); tos = Tos(false); }
+            label[i] = out.len();
+            tos_in[i] = tos;
+            let h = out.len();
+            let mut piece = Vec::new();
+            emit_one(&mut piece, code, i, tos, &pins, &fuse, &label, h)?;
+            out.extend_from_slice(&piece);
+            tos = match fuse[i] { 1 => Tos(true), 2 => tos, _ => next_tos(&code[i]) };
         }
+        start[n] = out.len();
+        if tos.0 && targets.contains(&n) { out.push(0x50); tos = Tos(false); }
+        label[n] = out.len();
+        tos_in[n] = tos;
+        if !tos.0 { out.push(0x58); }
+        out.push(0xC3);
+        let _ = 周;
     }
-    if start[n] != label[n] { b.push(0x50); }
-    if !tos_in[n].0 { b.push(0x58); }                                                // pop rax(載っていなければ持ち上げる)
-    b.push(0xC3);                                                                     // ret
-    debug_assert_eq!(b.len(), label[n] + if tos_in[n].0 { 1 } else { 2 });
-    Ok(b)
+    Ok(out)
 }
 
 struct Jitted { page: *mut u8 }
@@ -892,7 +984,12 @@ fn scan_owned(n: &Json, t: i64, ctx: u8) -> bool {   // ctx: 0=その他 / 1=覗
         ntag::ADD | ntag::SUB | ntag::EQ | ntag::OAPP | ntag::SETBOX | ntag::WHILE => scan_owned(pcar(a), t, 0) && scan_owned(pcdr(a), t, 0),
         ntag::LET => scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
         ntag::IF => scan_owned(pcar(a), t, 0) && scan_owned(pcar(pcdr(a)), t, 0) && scan_owned(pcdr(pcdr(a)), t, 0),
-        ntag::OFN => scan_owned(pcdr(pcdr(a)), t, 0),
+        // ⚠️ `ofn` は (16,(param, body)) —— body は **pcdr(a)**。
+        //   ここは `let`(4,(id,(val,body))) の形を写し間違えて `pcdr(pcdr(a))` になっていた。
+        //   実測 2026-09-06: 「list の箱」と「閉包」を **同時に**持つ程式で panic（num でない）。
+        //   probe は片方ずつしか持っていなかったので、一度も当たらなかった。
+        //   ◆ 型: 似た形を写す時ほど、**一段の深さ**を確かめる。
+        ntag::OFN => scan_owned(pcdr(a), t, 0),
         ntag::NEWBOX => scan_owned(a, t, 0),
         ntag::LIT | ntag::VAR | ntag::NIL => true,
         _ => false,
@@ -914,7 +1011,7 @@ fn kname(k: Kind) -> &'static str { match k { Kind::Int => "int", Kind::List => 
 
 struct WComp {
     b: Vec<u8>, env: Vec<(i64, Bind)>, nslots: u32, outer: Vec<(i64, Where)>,
-    fns: Vec<(i64, Json)>, depth: u32,
+    fns: Vec<(i64, Json, usize)>, depth: u32,   // 三つ目 = **定義時の env の長さ**(閉包の捕捉)
     kinds: HashMap<u32, Kind>,        // スロット → 値の形(静的に推した)
     heap: Option<(u32, u32, u32)>,    // (hp, ta, td)—— 使った時だけ確保する控え
     own: u8,                          // 段G″: 0=回収しない / 1=セル単位で返す / 2=**まとめて捨てる**(region)
@@ -989,7 +1086,7 @@ impl WComp {
         let val = pcar(pcdr(arg));
         if is_p(val) && pnum(pcar(val)) == ntag::OFN {                    // ofn —— 閉包(コードも slot も出さない)
             let param = pnum(pcar(pcdr(val)));
-            self.fns.push((param, pcdr(pcdr(val)).clone()));
+            self.fns.push((param, pcdr(pcdr(val)).clone(), self.env.len()));   // ← 定義時の env
             self.env.push((id, Bind::Fn((self.fns.len() - 1) as u32)));
             return Ok(());
         }
@@ -1244,12 +1341,16 @@ impl WComp {
                 let idx = match self.look(pnum(pcdr(f))) {
                     Some(Bind::Fn(i)) => i, _ => return Err("呼び先が静的に定まらない(閉包が escape)".into()) };
                 if self.depth >= 8 { return Err("inline が深すぎる".into()); }
-                let (param, body) = self.fns[idx as usize].clone();
-                let ka = self.emit_val(pcdr(arg))?;
+                let (param, body, elen) = self.fns[idx as usize].clone();
+                let ka = self.emit_val(pcdr(arg))?;                 // 実引数は呼び側の env で
                 let s = self.slot(); self.op_u(0x21, s); self.kinds.insert(s, ka);
+                // body は **定義時の env** で解く（段E と同じ理由。二箇所に同じ穴が在った）
+                let 呼び側 = self.env.split_off(elen);
                 self.env.push((param, Bind::Slot(s)));
                 self.depth += 1; let r = self.emit_val(&body); self.depth -= 1;
-                self.env.pop(); r?
+                self.env.truncate(elen);        // ← param もここで落ちる(元の env.pop() は外した)
+                self.env.extend(呼び側);
+                r?
             }
             ntag::OFN => return Err("閉包が let の外".into()),
             ntag::VAR => match self.look(pnum(arg)) {
