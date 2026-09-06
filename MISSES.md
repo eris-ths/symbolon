@@ -146,7 +146,9 @@ never again. Memory use now goes through a single call that sets the flag the de
 reads, so the two cannot drift.
 
 The gate is the fuzzer itself, pinned to a seed so it is reproducible.
-Shooting `--n 120 --seed 20260906 --depth 4` agrees on 351 runs, declining 9 of them.
+Shooting `--n 120 --seed 20260906 --depth 4` agrees on 339 runs, declining 21 of them.
+(Those counts moved when the generator was widened to reach nested reclaim regions; the
+earlier pair was 351 and 9.)
 The declines are the prepend case from entry 5, still refused rather than compiled; the count
 is gated too, so a silent widening of what the compiler declines shows up as a number.
 
