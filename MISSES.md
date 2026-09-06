@@ -80,10 +80,12 @@ is never the whole set.
 comment above a helper that **was never called even once**. The behaviour lived somewhere
 else. A comment describing a design is not the design.
 
-The fast exit now refuses both, so such a program falls back to the interpreter stage and is
-merely slow — the behaviour the prediction had claimed. Both refusals are gated by positive
-evidence: shooting `probe_prepend.json` must report `REFUSE str-prepend`, and
-`probe_strbox.json` must report `REFUSE str-as-list`. Delete the refusal and the gate falls.
+The fast exit refused both, so such a program fell back to the interpreter stage and was
+merely slow — the behaviour the prediction had claimed. Storing a string into a slot already
+typed as a list is a type error and is still refused: `probe_strbox.json` must report `REFUSE str-as-list`,
+and deleting the refusal drops the gate. Prepending was different: it is
+a real operation that simply needs a copy, and entry 8 records what happened when the copy
+was written.
 
 ---
 
@@ -160,9 +162,45 @@ the shape of miss this file exists to record, caught one step earlier than usual
 
 ---
 
+## 8. "Refusing was the timid answer; supporting it is the real fix"
+
+**Measured: the support silently truncated. The refusal it replaced had been correct.**
+
+Entry 5 ends with the fast exit declining to put a character in front of a packed string,
+because that needs a copy. Declining is honest but costly: one prepend anywhere in a program
+and the whole program falls back to the interpreter. So the copy was written — allocate
+`len+1` bytes, store the new head, copy the rest, hand back the packed word. The prepend
+probe folded and ran and gave the right answer, and every existing gate stayed green.
+
+The fuzzer from entry 7 disagreed within 300 programs. A packed string holds **one byte per
+element**; the head being prepended is an arbitrary machine integer. `cons(add(394, 305), s)`
+stored 699 through an `i64.store8` and got 187 back. The sum came out 256 short. Nothing
+crashed.
+
+🔴 The day before, this file recorded that a hoped-for graceful degradation had never been
+implemented. This is the same lesson from the other side: **a correct refusal was replaced by
+an implementation that was silently wrong.** "We support it now" is not the same claim as "we
+support it correctly", and the second one is the only one worth making.
+
+Prepending is now folded **only when the head is a literal in 0..255** — which is the case
+strings are actually built from — and refused otherwise, so the refusal was narrowed rather
+than removed. Both halves are gated. Shooting `node probe_run.mjs probe_prepend.wasm 88020`
+must agree; and `probe_prependw.json`, whose head is 1000, must report `REFUSE str-prepend-nonbyte`.
+
+The measured result is better than the prediction in entry 5 had hoped for. That prediction
+said the program would fall back to cons cells and be *correct but slow*; instead it stays
+packed, at one byte per character where a cell costs sixteen. The prepend probe reports
+a heap peak of `63` sixteen-byte units where cells would have needed `960`.
+
+▲ The remaining road, unbuilt and written down as unbuilt: expanding a packed string back
+into cells would support an arbitrary integer head, at one cell per character. It will be
+written when something needs it, not before.
+
+---
+
 ## Misses of a different kind
 
-The seven above are predictions about the system. These are about us, and they recur:
+The eight above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|
@@ -174,6 +212,7 @@ The seven above are predictions about the system. These are about us, and they r
 | a summary line read "all stages agree" while one of the stages had never been run | **A check must not claim more ground in its name than it covers in its body.** |
 | a compiler warning had been printing on every build for as long as anyone could remember | **A warning nobody reads is not a warning. Build clean, or it is decoration.** |
 | a resource was declared in one place and used in another, and the two drifted | **Derive the declaration from the use. Two places that must agree will not.** |
+| a lesson written down one day was walked into the next, by the person who wrote it | **Writing the rule down is not obeying it. Only a gate obeys.** |
 
-◆ All eight are the same shape: **existing and working are different.** The gates in this
+◆ All nine are the same shape: **existing and working are different.** The gates in this
 repository exist because of them.

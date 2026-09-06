@@ -932,6 +932,13 @@ impl WComp {
 
     /// 静的な cons の鎖 —— car が 0..255 の lit、cdr が nil か同じ形 —— を byte 列として読む。
     /// ⚠️ これが見抜けなければ「文字列の速い出口」は成立しない(2026-09-05 の予想の難所②)。
+    /// 節が **0..255 の即値**なら、その値。詰めた文字列(1 B/要素)へ足せるのはこれだけ。
+    fn static_byte(n: &Json) -> Option<i64> {
+        if !is_p(n) || pnum(pcar(n)) != 0 { return None; }
+        let v = pnum(pcdr(n));
+        if (0..=255).contains(&v) { Some(v) } else { None }
+    }
+
     fn as_static_str(n: &Json) -> Option<Vec<u8>> {
         let mut out = Vec::new();
         let mut cur = n;
@@ -962,6 +969,78 @@ impl WComp {
     fn tmp_str(&mut self) -> u32 {
         if let Some(t) = self.tstr { return t; }
         let t = self.slot(); self.tstr = Some(t); t
+    }
+
+    /// 峰(peak)を memory[0] へ —— 回収の有無を外から見るための計器。
+    /// ⚠️ **計器は命令数を動かす**(回収すると hp>peak が偽になり店じまいが省かれる)
+    ///    ⇒ 費用を測る走行では `--nopeak` で外す。峰を読む走行と分ける。
+    /// ⚠️ 一口にしてある —— 積む所が二つ(cons と str の前置)になった時、片方にだけ足し忘れると
+    ///   「回収した」ように見える。**計器は使う所ごとに書かない。**
+    fn emit_peak(&mut self, hp: u32) {
+        if !self.peak { return; }
+        // ⚠️ `if`(0x04)は使わない —— init.zig(exp/03)が持たない(2026-09-04 実測:
+        //    「未対応 opcode 0x4 @body」)。block + br_if は持つので、そちらの形で書く。
+        self.op(0x02); self.b.push(0x40);                                          // block(void)
+        self.op_u(0x20, hp);
+        self.op(0x41); self.b.push(0x00); self.memop(0x29, 0x03, 0);
+        self.op(0x55);                                                             // i64.gt_s
+        self.op(0x45);                                                             // i32.eqz(偽なら抜ける)
+        self.op_u(0x0D, 0);                                                        // br_if 0
+        self.op(0x41); self.b.push(0x00); self.op_u(0x20, hp);
+        self.memop(0x37, 0x03, 0);                                                 // i64.store
+        self.op(0x0B);
+    }
+
+    /// 段G⁗: **詰めた文字列の前に一文字足す**(2026-09-06)。
+    ///
+    /// 前日まではここで断っていた —— 「コピーが要るから畳めない」。断りは *正しかった* が、
+    /// 断ると **その程式は丸ごと wasm にならない**（前置が一箇所在るだけで段E へ落ちる）。
+    /// ⇒ コピーを **書いた**。詰めた形（番地<<32|長さ）のまま、heap に len+1 バイト置き直す。
+    ///
+    /// 費用: O(len) の byte 複写。cons セルなら O(1) なので **前置を繰り返す程式では不利**。
+    /// ⚠️ ただし置き場所は 1 B/文字 のまま ⇒ セルに落とすより **16 分の 1 の場所**で済む。
+    ///   どちらが速いかは形による。ここは「畳めるようにした」であって「速くした」ではない。
+    ///
+    /// ⚠️ 出来た str は **heap を指す**（それまでは data 節だけを指していた）。
+    ///   ⇒ region の回収が下から抜けうる ⇒ close_scope / foreign 判定を Str にも広げた。
+    ///   これを忘れると、回収した番地を長さ付きで持ち歩く = 静かに間違える。
+    ///
+    /// 入り: stack 頂に str の一語 / `ta` に足す文字。出: stack に新しい str の一語。
+    fn emit_str_prepend(&mut self, hp: u32, ta: u32) {
+        // 控えは **site ごと**(二十五段の型。共有すると入れ子の前置で潰れる)
+        let (sv, len, src, dst, i) =
+            (self.slot(), self.slot(), self.slot(), self.slot(), self.slot());
+        self.op_u(0x21, sv);
+        self.op_u(0x20, hp); self.op_u(0x21, dst);                                 // dst = hp
+        self.op_u(0x20, sv); self.op(0x42); sleb(0xFFFF_FFFFu32 as i64, &mut self.b);
+        self.op(0x83); self.op_u(0x21, len);                                       // len = sv & 0xFFFFFFFF
+        self.op_u(0x20, sv); self.op(0x42); self.b.push(32); self.op(0x88);
+        self.op_u(0x21, src);                                                      // src = sv >>> 32
+        self.op_u(0x20, dst); self.op(0xA7); self.op_u(0x20, ta);
+        self.memop(0x3C, 0x00, 0);                                                 // mem8[dst] = 足す文字
+        self.op(0x42); self.b.push(0x00); self.op_u(0x21, i);                      // i = 0
+        self.op(0x02); self.b.push(0x40);                                          // block  ← depth 1
+        self.op(0x03); self.b.push(0x40);                                          // loop   ← depth 0
+        self.op_u(0x20, i); self.op_u(0x20, len); self.op(0x51);                   // i == len ?
+        self.op_u(0x0D, 1);                                                        // br_if 1(抜ける)
+        self.op_u(0x20, dst); self.op_u(0x20, i); self.op(0x7C);
+        self.op(0x42); self.b.push(0x01); self.op(0x7C); self.op(0xA7);            // dst+1+i
+        self.op_u(0x20, src); self.op_u(0x20, i); self.op(0x7C); self.op(0xA7);
+        self.memop(0x31, 0x00, 0);                                                 // mem8[src+i]
+        self.memop(0x3C, 0x00, 0);                                                 // mem8[dst+1+i] = それ
+        self.op_u(0x20, i); self.op(0x42); self.b.push(0x01); self.op(0x7C); self.op_u(0x21, i);
+        self.op_u(0x0C, 0);                                                        // br 0
+        self.op(0x0B); self.op(0x0B);
+        // hp += (len+1) を 16 に切り上げ —— 峰の読みが「16 B 単位」のままになるように揃える
+        self.op_u(0x20, hp);
+        self.op_u(0x20, len); self.op(0x42); self.b.push(0x10); self.op(0x7C);
+        self.op(0x42); sleb(-16, &mut self.b); self.op(0x83);
+        self.op(0x7C); self.op_u(0x21, hp);
+        self.emit_peak(hp);
+        // 値 = (dst<<32) | (len+1)
+        self.op_u(0x20, dst); self.op(0x42); self.b.push(32); self.op(0x86);
+        self.op_u(0x20, len); self.op(0x42); self.b.push(0x01); self.op(0x7C);
+        self.op(0x84);
     }
 
     fn emit_val(&mut self, n: &Json) -> Result<Kind, String> {
@@ -995,10 +1074,19 @@ impl WComp {
                 self.op_u(0x21, ta);                                                       // local.set $ta
                 let d = self.emit_val(pcdr(arg))?;
                 if d == Kind::Str {
-                    // 前置は **コピーが要る**(詰めた実体の前に一語は置けない)。
-                    // 段G′ は断り、段E に落とす —— *遅いが正しい*。⚠️ 黙って積むと静かに間違える。
-                    // ⚠️ 印は **文言でなく符牒**。門を日本語の一文に錨づけると、言い換えた日に静かに外れる。
-                    return Err("cons の前置(詰めた文字列の前に足す)は畳めない —— コピーが要る [REFUSE str-prepend]".into());
+                    // 段G⁗: 前置は **コピーが要る**。断っていた所を、コピーを書いて支えた(2026-09-06)。
+                    // 🔴 ただし **頭が byte に収まる時だけ**。詰めた文字列は 1 B/要素なので、
+                    //   任意の整数を前に置くと *黙って切り捨てる*(i64.store8)。
+                    //   実測 2026-09-06: 差分ファズが `cons(add(394,305), str)` で掴んだ ——
+                    //   699 が 187(=699&0xFF)に化け、和が 256 ずれた。落ちない。
+                    //   ⚠️ **前日「正しい断り」だった所を、静かに間違える実装に替えていた。**
+                    //     支えられる形だけ支え、残りは断る —— 断りの範囲を *狭めた* のであって、無くしたのではない。
+                    // ▲ まだ書いていない道: str をセルへ開いてから前置すれば任意の整数を支えられる
+                    //   (16 B/文字。正しいが場所を食う)。要ると分かってから書く。
+                    match Self::static_byte(pcar(arg)) {
+                        Some(_) => { self.emit_str_prepend(hp, ta); return Ok(Kind::Str); }
+                        None => return Err("詰めた文字列への前置は **頭が 0..255 の即値の時だけ** —— 任意の整数は 1 B に収まらない [REFUSE str-prepend-nonbyte]".into()),
+                    }
                 }
                 Self::want(Kind::List, d, "cons の cdr")?;
                 self.op_u(0x21, td);
@@ -1009,22 +1097,7 @@ impl WComp {
                 }
                 self.op_u(0x20, hp);                                                       // 値 = 番地
                 self.op_u(0x20, hp); self.op(0x42); self.b.push(0x10); self.op(0x7C); self.op_u(0x21, hp);
-                // 峰(peak)を memory[0] へ —— 回収の有無を外から見るための計器。
-                // ⚠️ **計器は命令数を動かす**(回収すると hp>peak が偽になり店じまいが省かれる)
-                //    ⇒ 費用を測る走行では `--nopeak` で外す。峰を読む走行と分ける。
-                if self.peak {
-                // ⚠️ `if`(0x04)は使わない —— init.zig(exp/03)が持たない(2026-09-04 実測:
-                //    「未対応 opcode 0x4 @body」)。block + br_if は持つので、そちらの形で書く。
-                self.op(0x02); self.b.push(0x40);                                          // block(void)
-                self.op_u(0x20, hp);
-                self.op(0x41); self.b.push(0x00); self.memop(0x29, 0x03, 0);
-                self.op(0x55);                                                             // i64.gt_s
-                self.op(0x45);                                                             // i32.eqz(偽なら抜ける)
-                self.op_u(0x0D, 0);                                                        // br_if 0
-                self.op(0x41); self.b.push(0x00); self.op_u(0x20, hp);
-                self.memop(0x37, 0x03, 0);                                                 // i64.store
-                self.op(0x0B);
-                }
+                self.emit_peak(hp);
                 Kind::List
             }
             9 | 10 | 11 => {
@@ -1087,7 +1160,9 @@ impl WComp {
                 }
             },
             4 => { self.bind_let(arg)?; let k = self.emit_val(pcdr(pcdr(arg)))?;
-                   self.close_scope(k == Kind::List); k }
+                   // ⚠️ Str も heap を指しうる(段G⁗ の前置) ⇒ **int 以外は持ち出し**扱い。
+                   //   list だけ見ていると、回収した番地を長さ付きで持ち歩くことになる。
+                   self.close_scope(k != Kind::Int); k }
             6 => { let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
                    self.op(0x42); self.b.push(0x00); self.op(0x52);
                    self.op(0x04); self.b.push(0x7E);                                       // if (result i64)
@@ -1136,9 +1211,9 @@ impl WComp {
                     && { let inner = pcdr(v);
                          is_p(inner) && pnum(pcar(inner)) == 22
                          && self.box_slot(pcdr(inner)).map(|s2| s2 == s).unwrap_or(false) };
-                if self.slot_kind(s) == Kind::List
+                if self.slot_kind(s) != Kind::Int
                    && self.regions.last().map(|(_, bs)| *bs != s).unwrap_or(false) {
-                    self.foreign_list_write = true;              // region の外の list を書いた
+                    self.foreign_list_write = true;              // region の外の heap 値を書いた(list / str)
                 }
                 if self.own == 1 && is_consume && self.owned.contains_key(&s) {
                     let (hp, ta, _) = self.heap_locals();

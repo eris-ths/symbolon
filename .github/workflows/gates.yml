@@ -37,7 +37,8 @@ jobs:
           bash symbolon/promote.sh 2>&1 | tee /tmp/gates.log
 
       # 🔴 A green check is not enough. On 2026-09-05 this workflow went green while the
-      #    claims gate had silently skipped all 55 of its checks, because the tool it fires
+      #    claims gate had silently skipped all 55 of its checks (the ledger held 55 rows
+      #    that day — this is history, not a current count), because the tool it fires
       #    was not where it looked. Passing is not the same as having run.
       #    So: assert the expected *shape*, not just the absence of failures.
       - name: the shape must be what we expect (a green check is not evidence)
@@ -52,7 +53,10 @@ jobs:
           [ "${fail:-1}" -eq 0 ] || { echo "::error::a gate failed"; bad=1; }
           # Exactly three gates cannot run in public: the deterministic counter (needs a
           # sister runtime that is not published), isolation (only means something in the
-          # source tree), and the claims gate (which depends on the counter for 5 of its rows).
+          # source tree), and the claims gate — some of its rows are re-derived by gates that
+          # need one of those, or the language implementation, which is not published either.
+          # ⚠️ No count here on purpose. The number of skipped rows moves whenever the ledger
+          #    grows; the run prints its own, and a number kept in two places drifts in one.
           [ "${skip:-9}" -le 3 ] || { echo "::error::more gates skipped than the three that cannot run here — something degraded silently"; bad=1; }
           [ "${pass:-0}" -ge 4 ] || { echo "::error::fewer gates ran than expected"; bad=1; }
           exit "$bad"

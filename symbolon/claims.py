@@ -23,7 +23,8 @@ FL   = os.environ.get("FL", "")
 def 建てる():
     """門を撃つ実体（床の梯子）を用意する。
     ⚠️ 2026-09-05 実測 —— ここが `/tmp/fl` 決め打ちだったため、**手元では偶然通り、CI では
-       55 件すべてを黙って飛ばした**。単独で叩かれても成り立つように、無ければ自分で建てる。"""
+       55 件すべてを黙って飛ばした**。単独で叩かれても成り立つように、無ければ自分で建てる。
+       ※ この 55 は **その日の台帳の行数**（履歴）。いまの数ではない —— 現在の数は走らせれば出る。"""
     global FL
     if FL and os.path.exists(FL):
         return True
@@ -65,11 +66,13 @@ def 建てる():
     #    ⇒ この形は **実走まで撃たないと証拠にならない**（下の nest_run が本体）。
     "nest":      ([FL, "--probe", "probe_nest.json"],                 None),
     "prepend":   ([FL, "--probe", "probe_prepend.json"],              None),
+    "prependw":  ([FL, "--probe", "probe_prependw.json"],             None),
     "strbox":    ([FL, "--probe", "probe_strbox.json"],               None),
     # ⚠️ 吐いた物を走らせる門は、吐く門の *後* でなければ意味がない。順を宣言する
     #    （cache の並び順に頼っていた —— 脆かった）。
     "str_run":   (["node", "probe_run.mjs", "probe_str.wasm", "87320"], ("後に", "str")),
     "nest_run":  (["node", "probe_run.mjs", "probe_nest.wasm", "702"], ("後に", "nest")),
+    "prep_run":  (["node", "probe_run.mjs", "probe_prepend.wasm", "88020"], ("後に", "prepend")),
     # 🔴 **書かれた言語の側から撃つ門**(2026-09-06)。手で置いた probe は「思いついた形」しか覆えない
     #    ⇒ 種を固定した差分ファズで、形の方を機械に作らせる。⚠️ 種と本数は決め打ち（再現できないと門にならない）。
     #    ⚠️ 前提は **言語実装が木に在ること**。影には出さない物なので、公開では skip と名乗る
