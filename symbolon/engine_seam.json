@@ -3,6 +3,5 @@
   "exports": { "step": "(i64 event) -> i64", "memory": "i64 スロット列" },
   "state": { "total": { "slot": 0, "byte": 0 }, "wraps": { "slot": 1, "byte": 8 } },
   "read": "new BigInt64Array(memory.buffer)[slot]",
-  "reset": "host が同じ配列へ書く(状態の持ち主は host)",
-  "wasm": 133 
+  "reset": "host が同じ配列へ書く(状態の持ち主は host)"
 }

@@ -7,7 +7,7 @@ COMMON.md:50セル	再掲	§1-5 表の値(台帳: 寿命/own・own2 と同じ行
 COMMON.md:407分の1	再掲	台帳: 整数/減り
 COMMON.md:426分の1	再掲	台帳: cons/減り
 COMMON.md:102B	再掲	台帳: 段F/整数/バイト（本文と図の二箇所。⚠️ 表だけ直して本文を残す型は MISSES §1 そのもの）
-COMMON.md:133B	再掲	台帳: 段H/バイト
+COMMON.md:159B	再掲	台帳: 段H/バイト
 COMMON.md:226B	再掲	台帳: 段G′/cons/バイト
 COMMON.md:80命令	再掲	台帳: 回収/region の行が持つ +80
 COMMON.md:4命令	導出	+80 = 20 回 × 4 命令(束縛 2 + scope 出口 2)
@@ -94,3 +94,4 @@ symbolon/MISSES.md:632×	導出	同上（段E の床D 比、四本×2 標本の�
 symbolon/MISSES.md:740×	経緯	床D を速くする前の値。作り直せない（今の正は 339〜632×）
 COMMON.md:1000セル	再掲	四十一段の表。門は MISSES §17 側（台帳: 寿命/LIFO/通/既定）
 COMMON.md:1020セル	再掲	同上（台帳: 寿命/LIFO/否/既定・否/峰）
+COMMON.md:26B	導出	if 二つ分の増分（今の目方は §1-1 の表が正）

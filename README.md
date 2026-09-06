@@ -70,7 +70,7 @@ These appear throughout. They are load-bearing, not decoration.
 | wasm with a bump heap (cons-heavy) | **226 B** |
 | wasm for the string-heavy program (literal packed into the data section) | **256 B** |
 | x86-64 machine code, hand-encoded, `mmap` + W^X | **102 B** |
-| engine module (state + `step`) | **133 B** |
+| engine module (state + `step`) | **159 B** |
 | self-contained HTML, wasm inlined as base64 | **2,694 B** |
 
 ◆ **The win is removing instructions, not lowering the output level.**

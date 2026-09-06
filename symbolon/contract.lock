@@ -8,9 +8,17 @@
 #   machine.json / cases.json … python3 floor_emit.py
 #   engine_seam.json          … floor_ladder --engine
 #
-version 1.0.0
+# 版の履歴 —— **なぜ動いたか**を書く。数字だけ動かさない。
+#   1.0.0  2026-09-04  制定（14-op / 値モデルの整数域 / object tag 表 / engine seam）
+#   1.1.0  2026-09-06  engine_seam.json から `"wasm": <目方>` を外した。
+#          ⚠️ 約束は一つも変えていない —— abi / exports / state / read / reset は一文字も動いていない。
+#          外したのは **実装の事実**（そのうえ数の三度目の写しで、実装を直すたびに門③ が鳴っていた）。
+#          ▲ この欄を読む機械はゼロだと撃って確かめたうえで外し、それでも **版は動かした**
+#            （契約ファイルの中身が変わったから。黙って指紋だけ直さないための版）。
+
+version 1.1.0
 ops 14
 cases 11
 sha256 machine.json      33d727261023c469e81f63e266ba480a11195a4e05551c3e8d707db16f6776bd
 sha256 cases.json        fead311bd0c9ff792f3434d51988977d3188e552816e556499d429e617b211eb
-sha256 engine_seam.json  05bfffaeb2f52de4f76a2f944c695fb409c1eaa82bf8b758caef08ef4e00c3a5
+sha256 engine_seam.json  2cd3ac900f0ebaf32c3c53c90872900d14730453e5a80379dc6893f6d424ea97

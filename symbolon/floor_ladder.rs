@@ -1194,11 +1194,16 @@ impl WComp {
 
     /// `if` の両枝を吐いて、それぞれの形を返す。
     /// ◆ **口は一つ** —— 巻き戻して吐き直す時も、必ずこの同じ道を通す。
-    fn emit_both(&mut self, arg: &Json) -> Result<(Kind, Kind), String> {
+    /// 値位置の `if` の両枝。値は **控えの局所** に仕舞い、block を抜けてから読む。
+    /// ⚠️ `else`(0x05)は使わない —— `if`(0x04)と対で、init.zig(exp/03)が持たない側。
+    fn emit_both(&mut self, arg: &Json, s: u32) -> Result<(Kind, Kind), String> {
         let t = self.emit_val(pcar(pcdr(arg)))?;
-        self.op(0x05);
+        self.op_u(0x21, s);                                                   // then の値を控えへ
+        self.op_u(0x0C, 1);                                                   // br L1(then の後は抜ける)
+        self.op(0x0B);                                                        // end L0
         let f = self.emit_val(pcdr(pcdr(arg)))?;
-        self.op(0x0B);
+        self.op_u(0x21, s);                                                   // else の値を控えへ
+        self.op(0x0B);                                                        // end L1
         Ok((t, f))
     }
 
@@ -1430,9 +1435,18 @@ impl WComp {
                    // ⚠️ Str も heap を指しうる(段G⁗ の前置) ⇒ **int 以外は持ち出し**扱い。
                    //   list だけ見ていると、回収した番地を長さ付きで持ち歩くことになる。
                    self.close_scope(k != Kind::Int); k }
-            ntag::IF => { let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
-                   self.op(0x42); self.b.push(0x00); self.op(0x52);
-                   self.op(0x04); self.b.push(0x7E);                                       // if (result i64)
+            ntag::IF => {
+                   // ⚠️ **値位置でも `if`(0x04)を使わない** —— init.zig(exp/03)が持たない(九段の実測
+                   //    「未対応 opcode 0x4 @body」)。効果位置(下)と同じ block 二枚で書き、
+                   //    枝の値は控えの局所で受ける。⇒ 口を二つ持たない。
+                   // ▲ 控えは **site ごと**に取る（共有しない）—— 二十五段の型そのもの。
+                   //    入れ子の if で外側の控えを内側が潰す（局所の値を大域の器に置くと合わない）。
+                   let sv = self.slot();
+                   self.op(0x02); self.b.push(0x40);                                       // block L1(抜け先)
+                   self.op(0x02); self.b.push(0x40);                                       // block L0(else 先)
+                   let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
+                   self.op(0x42); self.b.push(0x00); self.op(0x52);                        // cond != 0
+                   self.op(0x45); self.op_u(0x0D, 0);                                      // 偽 → L0 へ
                    // 🔴 枝で形が割れる一番多い理由は **要素の値**（2026-09-06、差分ファズが掴んだ）。
                    //   `if c then cons(3,cons(4,nil)) else cons(300,nil)` —— 前者は byte に収まるので
                    //   段G‴ が **詰めて Str** にし、後者は List のまま ⇒ 同じ「list を返す if」なのに断っていた。
@@ -1443,20 +1457,23 @@ impl WComp {
                    //   ▲ 巻き戻すのは **b(吐いた byte)だけ** —— 一周目に取った局所と池の文字は残る
                    //     （使われない局所と、誰も指さない data の数 byte）。正しさには効かない。場所だけ。
                    let mark = self.b.len();
-                   let (t, f) = self.emit_both(arg)?;
-                   if t == f { t } else {
+                   let (t, f) = self.emit_both(arg, sv)?;
+                   let k = if t == f { t } else {
                        if !matches!((t, f), (Kind::Str, Kind::List) | (Kind::List, Kind::Str)) {
                            return Err("if の両枝で値の形が違う".into());
                        }
                        self.b.truncate(mark);
                        let 元 = self.no_intern;
                        self.no_intern = true;
-                       let r = self.emit_both(arg);
+                       let r = self.emit_both(arg, sv);
                        self.no_intern = 元;              // ⚠️ 落ちても必ず戻す（外側の枝を巻き込まない）
                        let (t2, f2) = r?;
                        if t2 != f2 { return Err("if の両枝で値の形が違う".into()); }
                        t2
-                   } }
+                   };
+                   self.op_u(0x20, sv);                                                    // 控えを読む = 値位置
+                   self.kinds.insert(sv, k);
+                   k }
             ntag::GETBOX => { let s = self.box_slot(arg)?; self.op_u(0x20, s); self.slot_kind(s) }
             ntag::SETBOX => { let s = self.box_slot(pcar(arg))?; let want = self.slot_kind(s);
                     let k = self.emit_val(pcdr(arg))?; Self::want(want, k, "setbox")?;
@@ -1570,6 +1587,79 @@ fn has_import(m: &[u8]) -> bool {
     false
 }
 
+
+/// 吐いた module の code 節を歩き、`if`(0x04)が **居ないこと** を確かめる。
+/// ⚠️ これは *不在* を根拠にする主張 ⇒ 二十三段の型どおり、**在ることを要る印**へ裏返す
+///    （`[NO-IFOP ok]`。`NOIMPORT` と同じ向き）。
+/// ⚠️ 知らない opcode に当たったら「無い」ではなく **測れない** で落ちる ——
+///    黙って 0 を返すと、壊れた走査と「本当に無い」が同じ答えになる（門⑥ で一度払った型）。
+fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
+    fn u(m: &[u8], i: &mut usize) -> Result<usize, String> {
+        let (mut n, mut sh) = (0usize, 0u32);
+        loop {
+            if *i >= m.len() { return Err("uleb が module の外へ出た".into()); }
+            let x = m[*i]; *i += 1;
+            n |= ((x & 0x7f) as usize) << sh; sh += 7;
+            if x < 0x80 { return Ok(n); }
+        }
+    }
+    fn sk(m: &[u8], i: &mut usize) -> Result<(), String> {
+        loop {
+            if *i >= m.len() { return Err("sleb が module の外へ出た".into()); }
+            let x = m[*i]; *i += 1;
+            if x < 0x80 { return Ok(()); }
+        }
+    }
+    // 引数を持たない opcode（この吐き出し器が実際に出す物だけ）
+    const NOIMM: [u8; 24] = [0x00, 0x01, 0x05, 0x0B, 0x0F, 0x1A, 0x1B, 0x45, 0x46, 0x51, 0x52,
+                             0x55, 0x6A, 0x6B, 0x7C, 0x7D, 0x7E, 0x7F, 0x83, 0x84, 0x86, 0x88,
+                             0xA7, 0xAD];
+    let (mut ifs, mut ops) = (0usize, 0usize);
+    let mut i = 8;                                        // magic(4) + version(4)
+    while i < m.len() {
+        let sid = m[i]; i += 1;
+        let n = u(m, &mut i)?;
+        let end = i + n;
+        if end > m.len() { return Err("節が module の外へ出た".into()); }
+        if sid == 10 {                                    // code 節
+            let mut j = i;
+            let cnt = u(m, &mut j)?;
+            for _ in 0..cnt {
+                let sz = u(m, &mut j)?;
+                let bend = j + sz;
+                if bend > end { return Err("本体が code 節の外へ出た".into()); }
+                let decls = u(m, &mut j)?;
+                for _ in 0..decls { u(m, &mut j)?; j += 1; }
+                while j < bend {
+                    let op = m[j]; j += 1; ops += 1;
+                    if op == 0x04 { ifs += 1; }
+                    if NOIMM.contains(&op) {
+                    } else if op == 0x02 || op == 0x03 || op == 0x04 { j += 1;          // blocktype
+                    } else if matches!(op, 0x0C | 0x0D | 0x20 | 0x21 | 0x22) { u(m, &mut j)?;
+                    } else if op == 0x41 || op == 0x42 { sk(m, &mut j)?;
+                    } else if (0x28..=0x3E).contains(&op) { u(m, &mut j)?; u(m, &mut j)?;
+                    } else { return Err(format!("測れない —— 知らない opcode 0x{:02X}", op)); }
+                }
+                j = bend;
+            }
+        }
+        i = end;
+    }
+    Ok((ifs, ops))
+}
+
+/// module を組む口は必ずここを通る ⇒ 印を出し忘れられない（宣言を使用から導く。二十六段の型）。
+fn no_ifop(m: &[u8]) {
+    match ifop_count(m) {
+        Err(e) => { println!("  ⛔ 値位置の if を測れない —— {}", e); std::process::exit(1); }
+        Ok((n, _)) if n > 0 => {
+            println!("  ⛔ module に if(0x04) が {} 個 —— init.zig が持たない形を吐いている", n);
+            std::process::exit(1);
+        }
+        Ok((_, ops)) => println!("  自給の続き: 値位置の if も block で書いた —— op {} を歩いて 0x04 なし [NO-IFOP ok]", ops),
+    }
+}
+
 fn wasm_module_d(body: &[u8], nlocals: u32, pages: Option<u32>, pool: &[u8]) -> Vec<u8> {
     let mut m: Vec<u8> = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
     let mut t = Vec::new(); uleb(1, &mut t); t.push(0x60); uleb(0, &mut t); uleb(1, &mut t); t.push(0x7E);
@@ -1600,6 +1690,7 @@ fn wasm_module_d(body: &[u8], nlocals: u32, pages: Option<u32>, pool: &[u8]) -> 
         uleb(pool.len() as u32, &mut d); d.extend_from_slice(pool);
         section(11, d, &mut m);
     }
+    no_ifop(&m);
     m
 }
 
@@ -1624,6 +1715,7 @@ fn wasm_engine_module(body: &[u8], nlocals: u32) -> Vec<u8> {
     fb.extend_from_slice(body); fb.push(0x0B);
     let mut c = Vec::new(); uleb(1, &mut c); uleb(fb.len() as u32, &mut c); c.extend_from_slice(&fb);
     section(10, c, &mut m);
+    no_ifop(&m);
     m
 }
 
@@ -1881,9 +1973,15 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
         fs::write("engine.wasm", &module).unwrap();
 
         // 接点そのもの —— seam をデータで置く。既存の web/app 側はこれだけ読めばよい。
+        // ⚠️ ここに `"wasm": <目方>` が在った（〜契約 v1.0.0）。**約束ではなく実装の事実**で、
+        //    しかも数の三度目の写しだった（文書 / 門の出力 / ここ）⇒ 実装を直すたびに
+        //    「契約が動いた」と門③ が鳴る形になっていた（2026-09-06 実測。値位置の if を
+        //    書き直しただけで鳴った）。⇒ 契約は **約束だけ**を持つ。目方は §1-1 と門②が持つ。
+        //    ▲ 外しても壊れる者は居ないことを撃って確かめた（この欄を読む機械はゼロ）。
+        //    ⚠️ それでも契約ファイルの中身が変わる ⇒ **版を上げた**(1.0.0 → 1.1.0)。黙って指紋だけ直さない。
         let seam = format!(
-            "{{\n  \"abi\": \"kokkos-engine/1\",\n  \"exports\": {{ \"step\": \"(i64 event) -> i64\", \"memory\": \"i64 スロット列\" }},\n  \"state\": {{ \"{}\": {{ \"slot\": 0, \"byte\": 0 }}, \"{}\": {{ \"slot\": 1, \"byte\": 8 }} }},\n  \"read\": \"new BigInt64Array(memory.buffer)[slot]\",\n  \"reset\": \"host が同じ配列へ書く(状態の持ち主は host)\",\n  \"wasm\": {} \n}}\n",
-            state[0], state[1], module.len());
+            "{{\n  \"abi\": \"kokkos-engine/1\",\n  \"exports\": {{ \"step\": \"(i64 event) -> i64\", \"memory\": \"i64 スロット列\" }},\n  \"state\": {{ \"{}\": {{ \"slot\": 0, \"byte\": 0 }}, \"{}\": {{ \"slot\": 1, \"byte\": 8 }} }},\n  \"read\": \"new BigInt64Array(memory.buffer)[slot]\",\n  \"reset\": \"host が同じ配列へ書く(状態の持ち主は host)\"\n}}\n",
+            state[0], state[1]);
         fs::write("engine_seam.json", &seam).unwrap();
 
         let html = format!(r#"<!doctype html><meta charset="utf-8"><title>kokkos engine seam(wasm × DOM)</title>

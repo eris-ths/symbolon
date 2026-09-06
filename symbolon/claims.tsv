@@ -19,9 +19,9 @@ cons/減り	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,
 段G/整数/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
 段G/閉包/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 段G′/cons/バイト	COMMON.md	| **段G′ wasm(cons が主役 —— pair を線形メモリの bump heap へ)** | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
-段H/バイト	COMMON.md	| 段H engine wasm(状態 + step) | ⟦133⟧ B |	engine	wasm (\d+) B
-段G/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **⟦2,694⟧ B** / **4,122 B** |	web	自己完結 HTML (\d+) B
-段H/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **2,694 B** / **⟦4,122⟧ B** |	engine	自己完結 HTML (\d+) B
+段H/バイト	COMMON.md	| 段H engine wasm(状態 + step) | ⟦159⟧ B |	engine	wasm (\d+) B
+段G/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **⟦2,694⟧ B** / **4,154 B** |	web	自己完結 HTML (\d+) B
+段H/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **2,694 B** / **⟦4,154⟧ B** |	engine	自己完結 HTML (\d+) B
 閉包/inline/バイト	COMMON.md	inline で丸ごと消え、**wasm ⟦107⟧ B** まで届く。	clos	段G′ wasm (\d+) B
 速さ表/cons/バイト	COMMON.md	| cons が主役 | 0.0185 ms | **0.00068 ms** | **⟦226⟧ B** | ≈**17,800x** |	cons	段G′ wasm (\d+) B
 速さ表/閉包/バイト	COMMON.md	| 閉包が主役 | 0.0107 ms | **0.00012 ms** | **⟦107⟧ B** | ≈**60,000x** |	clos	段G′ wasm (\d+) B
@@ -51,7 +51,7 @@ README/wasm/整数	symbolon/README.md	| wasm (integer loop / closure) | **⟦100
 README/wasm/閉包	symbolon/README.md	| wasm (integer loop / closure) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 README/wasm/cons	symbolon/README.md	| wasm with a bump heap (cons-heavy) | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
 README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦102⟧ B** |	ladder	機械語 (\d+) B
-README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦133⟧ B** |	engine	wasm (\d+) B
+README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦159⟧ B** |	engine	wasm (\d+) B
 README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B
 README/頭/wasm	symbolon/README.md	**⟦100⟧-byte** wasm	web	wasm (\d+) B
 README/頭/比	symbolon/README.md	falls by **⟦407⟧×**	ladder	段E は \d+ 個。\*\*(\d+) 分の 1
@@ -83,3 +83,4 @@ README/str/バイト	symbolon/README.md	| wasm for the string-heavy program (lit
 寿命/LIFO/通/峰	symbolon/MISSES.md	so the guard passes | 1,000 cells | **⟦50⟧ cells** |	life_own_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 寿命/LIFO/否/既定	symbolon/MISSES.md	so the guard rejects | ⟦1,020⟧ cells | **1,020 cells** |	lifo_def_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 寿命/LIFO/否/峰	symbolon/MISSES.md	so the guard rejects | 1,020 cells | **⟦1,020⟧ cells** |	lifo_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
+段H/自給の続き	COMMON.md	⟦NO-IFOP⟧ ok	engine	\[(NO-IFOP) ok\]
