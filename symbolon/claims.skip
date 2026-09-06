@@ -85,3 +85,12 @@ COMMON.md:24命令	経緯	三十三段で数えた時点の段F の命令数（�
 COMMON.md:5byte	経緯	間違って書いた長さ（実際は 6）。**誤りの記録** ⇒ 門で固定しない
 COMMON.md:2byte	導出	`local.set;local.get` を `local.tee` に畳んだ時の差（命令一つ分）。探した結果 *在らなかった* 当て先の見積り
 COMMON.md:351→	経緯	三十五段で「動いた前の値」として書いた数（発生器を広げる前の門の値）
+COMMON.md:339→	経緯	三十七段で「動いた前の値」として書いた数（枝の割れを直す前の門の値。今の正は台帳: 形/ファズ/一致）
+COMMON.md:14個	構造の定数	契約の op の数。三十八段で「op の番号を 14 個の定数と突き合わせる」と書いた所（contract.lock が正）
+symbolon/MISSES.md:6103390instructions	再掲	台帳: 床D/整数/命令（COMMON と README に門が在る。MISSES §16 は同じ数の再掲）
+symbolon/MISSES.md:407×	再掲	台帳: README/整数/比（§16 で「命令の比は動いていない」と言うために引いた）
+symbolon/MISSES.md:1.43×	導出	壁時計の比(25.6 → 17.9 ms)。時間は走行ごとに動くので門にしない —— README が同じ立場を明示している
+symbolon/MISSES.md:632×	導出	同上（段E の床D 比、四本×2 標本の上端。⚠️ 振れる ⇒ 幅ごと載せている）
+symbolon/MISSES.md:740×	経緯	床D を速くする前の値。作り直せない（今の正は 339〜632×）
+COMMON.md:1000セル	再掲	四十一段の表。門は MISSES §17 側（台帳: 寿命/LIFO/通/既定）
+COMMON.md:1020セル	再掲	同上（台帳: 寿命/LIFO/否/既定・否/峰）

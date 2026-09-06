@@ -146,9 +146,11 @@ never again. Memory use now goes through a single call that sets the flag the de
 reads, so the two cannot drift.
 
 The gate is the fuzzer itself, pinned to a seed so it is reproducible.
-Shooting `--n 120 --seed 20260906 --depth 4` agrees on 339 runs, declining 21 of them.
-(Those counts moved when the generator was widened to reach nested reclaim regions; the
-earlier pair was 351 and 9.)
+Shooting `--n 120 --seed 20260906 --depth 4` agrees on 354 runs, declining 6 of them.
+(Those counts move whenever the generator changes, because the shapes drawn change with it.
+Entry 14 is why they are not comparable across such a change.) The generator now draws eight
+shapes, and a run **fails** if any of the eight came out zero times — the roll call is the gate
+on its own coverage. Four seeds at this size agree on 1,440 runs with no disagreement.
 The declines are the prepend case from entry 5, still refused rather than compiled; the count
 is gated too, so a silent widening of what the compiler declines shows up as a number.
 
@@ -369,11 +371,159 @@ table left to disagree with.
 the next measurement was being taken, which is a good way to record a wrong number about
 something unrelated. Shoot a suspect binary under a timeout.
 
+## 14. "The fuzzer draws six shapes, so six shapes are covered"
+
+**Measured: one of the six had never been drawn — 0 out of 200,000.**
+
+The generator picked a shape by walking a chain of cumulative thresholds:
+
+```python
+if   c < 0.35: ...      # integer binding
+elif c < 0.65: ...      # list binding
+elif c < 0.62: ...      # counting while   <- ends below the band before it
+```
+
+The third band ends below the second, so it is dead. Behind it is the counting `while`: two
+boxes, an integer accumulator, no heap — and it is the only loop the x86-64 stage will accept.
+Every run printed how many programs that stage had taken, and the number was never zero, so
+nothing looked wrong. Those were straight-line integer programs. The loop was not among them.
+
+The typo is not the miss. The miss is that a generator can carry a dead arm and still print a
+number that reads like coverage: *"354 agree"* is agreement **among the shapes that were
+drawn**, and a shape that is never drawn does not appear in that number at all. It is absent,
+and absence is the one thing this repository keeps rediscovering it cannot read.
+
+The chain is now a weight table, where a band cannot be written unreachable. And every run ends
+with a roll call of what it actually produced, which **fails** if any declared shape came out
+zero. Same move as the module that scans its own output for imports: turn a claim founded on
+absence into one founded on presence, so that breaking it is loud rather than quiet.
+
+▲ The fix changed the random stream, so the ledger row moved with it. A number measured through
+a net with a hole in it does not carry across the repair.
+
+## 15. "Packing a list of small integers is an optimization — invisible to everything else"
+
+**Measured: it was visible in the type system, and it refused ordinary programs.**
+
+Stage G‴ packs a statically known chain of byte-sized literals into the data section: one byte
+per element instead of a sixteen-byte cell. The value is the same list; only the placement
+differs. That is what "optimization" was supposed to mean.
+
+The wasm stage infers a `Kind` for every expression, and a packed string is `Str` while a chain
+of cells is `List`. At an `if`, the two branches must agree. So:
+
+```
+if c then cons(3, cons(4, nil)) else cons(300, nil)
+```
+
+was **declined** — not because the branches return different things, they are both lists, but
+because one branch's elements happened to fit in a byte and the other's did not. The predicate
+that decided the program's fate was the *magnitude of its constants*.
+
+The differential fuzzer found it within a day of being taught to put lists under an `if` — a
+shape it had never drawn before, because `if` had only ever been generated around integers.
+
+The join now demotes: when the two branches differ only as `Str` against `List`, the emitted
+bytes are rewound and both branches are emitted again with packing switched off, so they agree
+as cells. Three probes that were declined now compile and run to the right answers — the gate shoots one
+of them and requires `303`; a branch
+whose halves genuinely differ — an integer against a list — is still declined. The refusal was
+narrowed, not removed.
+
+◆ **A representation is not a type.** The moment an optimization can be observed by a
+correctness check, it is no longer an optimization.
+
+⚠️ The rewind re-emits, rather than predicting the branch kinds with a separate function. A
+predictor would be a second mouth describing what the emitter does, and this repository has
+already paid for one of those: the table of instruction lengths in entry 13, which disagreed
+with the emitter by one byte and cost a segfault. The same emitter runs both times.
+
+## 16. "Floor D is a switch-dispatch VM at its practical limit"
+
+**Measured: 38.7% of its dispatches were a single four-instruction sequence — and that sequence
+was the machine's own opcode dispatch, not the floor's.**
+
+Floor D ran the integer benchmark at 4.20 ns per instruction, roughly twelve cycles, and the
+tool itself printed that switch-dispatch VMs bottom out around 1–3 ns. That read as *there is a
+little left and it is not interesting.*
+
+Counting the 6,103,390 instructions it executed says otherwise. Four opcodes cover **79.5%** of
+the stream — `Load` 25.5%, `Lit` 20.3%, `Eq` 19.8%, `JmpF` 13.9% — and they are not scattered.
+The dynamic four-gram `Load; Lit; Eq; JmpF` runs **787,565 times: 38.7% of every dispatch, in
+one shape.**
+
+That shape is the interpreter comparing an opcode tag against each of fourteen constants. It is
+not the floor being coarse; it is the price of the machine being a machine, standing on the
+floor and being counted as floor. Folding it into one instruction: **25.6 ms → 17.9 ms (1.43×)**,
+with 51.6% of dispatches gone.
+
+⚠️ The fold does not shorten the instruction vector. Jump targets are indices into it, so
+shrinking it would create two things that have to agree — the same shape as the instruction
+length table in entry 13, which cost a segfault. The folded instruction steps `pc` past its own
+remains instead, the set of jump targets is derived from the vector rather than kept beside it,
+and a position that can be jumped into is never folded.
+
+🔴 One number had been standing for two quantities. *"Instructions floor D actually ran:
+6,103,390"* was both the **thickness of the tower** — the work the machine's meaning demands —
+and the **floor's dispatch count**. Folding splits them: the tower is unchanged at 6,103,390,
+the dispatches fall to 2,956,119. Counting now runs on the unfolded stream and execution on the
+folded one, printed under different names. A gate was anchored on the old sentence and would
+have gone quiet the moment the sentence was corrected, so it now anchors on `[D-tower]`.
+
+🔴 A second copy of the same shape was found while writing this up, and it was ours. The
+counting run and the executing run were **two loops carrying the same fifteen arms**, differing
+only in a counter and a return value — and the fold had just added four more arms to each. Rust's
+exhaustiveness check stops an arm from being *missing*; it does not stop two arms from *saying
+different things*. That divergence would be silent, and the count it corrupts is a number the
+ledger gates. The two are now one function specialised on a constant. ▲ It costs about 6% of
+floor D's time, measured, and forcing full specialisation did not give it back. That price is
+paid deliberately.
+
+◆ **The ratios in this document that are stated in time shrank. The ratios stated in
+instructions did not move.** Stage E is 339–632× faster than floor D where it was 646–740× —
+and that spread is two samples of four programs, not a stable figure. Nothing got slower; the
+denominator changed. The 407× on the front page is an instruction ratio and has not moved,
+because it was never measuring the same thing. ⚠️ A slower denominator flatters the tower, so
+these are quoted from the build that includes the 6%, not the faster one.
+
+▲ Two things counted and not taken: inlining the comparison bought nothing outside the noise,
+and the next sequence, `Add; Add`, is 11.6% of what remains, which at roughly six nanoseconds
+per folded dispatch is a few percent of wall clock.
+
+## 17. "The cell-level reclaim is covered — there is a probe for it, and it passes"
+
+**Measured: every probe hit the side of the branch where it fires. The other side had never
+been run.**
+
+Stage G″'s `--own` returns a cell to the bump heap when a list box is consumed by
+`x := cdr(x)` — but only if the cell that fell off is **on top of the heap**. It is a bump
+allocator; nothing else can be returned. So the reclaim has two outcomes, and which one happens
+depends on what was allocated after the list.
+
+Every probe built a list and walked it immediately. In that shape the head is always the most
+recent allocation, so the guard always passes. The failing side — the one that decides whether
+a program leaks — was reachable in principle and had been run zero times.
+
+Adding the twin: same program, with one more cell allocated after the list is built and read
+after the walk, so the head is no longer on top.
+
+| | default | `--own` |
+|---|---|---|
+| walk a list built immediately before, so the guard passes | 1,000 cells | **50 cells** |
+| one more cell allocated after it, so the guard rejects | 1,020 cells | **1,020 cells** |
+
+Both are now gated, and the second gate requires the peak **not** to fall. A gate that only
+demands the peak drop cannot tell a working guard from an absent one — both look like a pass on
+the shape that was shot.
+
+◆ **An optimisation with a condition in it is not covered until both answers to that condition
+have been run.** Coverage of the code is not coverage of the decision.
+
 ---
 
 ## Misses of a different kind
 
-The thirteen above are predictions about the system. These are about us, and they recur:
+The seventeen above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|
@@ -386,6 +536,9 @@ The thirteen above are predictions about the system. These are about us, and the
 | a compiler warning had been printing on every build for as long as anyone could remember | **A warning nobody reads is not a warning. Build clean, or it is decoration.** |
 | a resource was declared in one place and used in another, and the two drifted | **Derive the declaration from the use. Two places that must agree will not.** |
 | a lesson written down one day was walked into the next, by the person who wrote it | **Writing the rule down is not obeying it. Only a gate obeys.** |
+| a generator carried a branch that could never be reached, and the run still printed a coverage-shaped number | **A count of agreements is a count among the shapes that were drawn. Shapes never drawn are absent, and absence is unreadable.** |
+| a new shape was added to the generator; the compiler declined it, then the reference floor declined it, so it reached the code under test zero times | **Emitting a shape is not shooting it. A refusal is not coverage.** |
+| a roll call was added to prove every shape was drawn; it counted shapes drawn, and a shape can be drawn into a program that is then declined | **Every count answers one question. Check which one, and whether it is the question you needed answered.** |
 
-◆ All nine are the same shape: **existing and working are different.** The gates in this
+◆ All twelve are the same shape: **existing and working are different.** The gates in this
 repository exist because of them.

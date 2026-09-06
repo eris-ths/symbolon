@@ -69,6 +69,16 @@ def 建てる():
     #    ⚠️ 所有の走査は「list の箱」が在る時だけ走る ⇒ **--own2 でも撃つ**（別の穴がそこに在った）。
     "capture":   ([FL, "--probe", "probe_capture.json"],              None),
     "cap_own2":  ([FL, "--probe", "probe_capture.json", "--own2"],    None),
+    # 🔴 **枝で置き方が割れる list**(2026-09-06、差分ファズが掴んだ)。要素が 0..255 の枝だけ
+    #    段G‴ が詰めて Str にするので、同じ「list を返す if」が **形の不一致**として断られていた。
+    #    ◆ 断りを *狭めた* 直し ⇒ 「畳めた」だけでなく **実走**まで要る（join_run が本体）。
+    "join":      ([FL, "--probe", "probe_join.json"],                 None),
+    # 🔴 **回収の判定を、両側から撃つ**(2026-09-06)。`--own` のセル単位回収は
+    #    「外れた頭が bump heap の **頂**に在る」時だけ hp を戻す。`probe_life` は作りたてを
+    #    舐めるので **通る側しか撃っていなかった** ⇒ 否定側(後から積んでから舐める)を足した。
+    #    ◆ 分岐を持つ最適化は、通る側と通らない側の両方を撃って初めて撃ったと言える。
+    "lifo":      ([FL, "--probe", "probe_lifo.json", "--own"],        None),
+    "lifo_def":  ([FL, "--probe", "probe_lifo.json"],                 None),
     "prepend":   ([FL, "--probe", "probe_prepend.json"],              None),
     "prependw":  ([FL, "--probe", "probe_prependw.json"],             None),
     "strbox":    ([FL, "--probe", "probe_strbox.json"],               None),
@@ -78,6 +88,12 @@ def 建てる():
     "nest_run":  (["node", "probe_run.mjs", "probe_nest.wasm", "702"], ("後に", "nest")),
     "prep_run":  (["node", "probe_run.mjs", "probe_prepend.wasm", "88020"], ("後に", "prepend")),
     "cap_run":   (["node", "probe_run.mjs", "probe_capture.wasm", "414"], ("後に", "capture")),
+    "join_run":  (["node", "probe_run.mjs", "probe_join.wasm", "303"], ("後に", "join")),
+    # 峰は **実走でしか出ない** ⇒ 回収の両側とも run 側で見る（畳めただけでは証拠にならない）
+    "life_own_run": (["node", "probe_run.mjs", "probe_life.own.wasm", "25500"], ("後に", "life_own")),
+    "lifo_run":  (["node", "probe_run.mjs", "probe_lifo.own.wasm", "45500"], ("後に", "lifo")),
+    "lifo_def_run": (["node", "probe_run.mjs", "probe_lifo.wasm", "45500"], ("後に", "lifo_def")),
+    "life_run":  (["node", "probe_run.mjs", "probe_life.wasm", "25500"], ("後に", "life")),
     # 🔴 **書かれた言語の側から撃つ門**(2026-09-06)。手で置いた probe は「思いついた形」しか覆えない
     #    ⇒ 種を固定した差分ファズで、形の方を機械に作らせる。⚠️ 種と本数は決め打ち（再現できないと門にならない）。
     #    ⚠️ 前提は **言語実装が木に在ること**。影には出さない物なので、公開では skip と名乗る
@@ -97,6 +113,17 @@ def 建てる():
 # ⚠️ 錨を持てない項は在る（scope の決めごと・立場）。**消さずに、理由付きで免除**する ——
 #   claims.skip と同じ作法。「錨が無い」ことを文書自身にも書かせる(▲ Unanchored:)。
 錨の要る節 = [("symbolon/README.md", "## ▲ What this does not do")]
+
+# 🔴 **錨の質**(2026-09-06)。門は「出力のどこ」に錨を取るかで壊れ方が変わる ——
+#   人の一文に錨づけた門は、**その一文を正しく直した日に静かに外れる**。
+#   実測: 2026-09-05 に「全段一致」を正した時に一本落ち、2026-09-06 に
+#   「床D が実際に回した命令」を正した時にもう一本落ちた（どちらも落ちたのは正しい。
+#   ⚠️ 怖いのは *落ちる* 方ではない —— **量を取り損ねて黙る**形の方）。
+#   ⇒ `[REFUSE …]` `[NOIMPORT ok]` `[AGREE stage-DEF]` `[RUN ok]` `[D-tower]` のような
+#     **符牒**に錨を取った門を数え、**減らさない**（一方通行の爪車）。
+#   ▲ 全部を符牒にはしていない。`機械語 (\d+) B` のように数のすぐ隣で短い錨は、
+#     言い換えの的になりにくい。**まず文らしい錨から替える。**
+符牒の床 = 11        # ⚠️ 増やすのは可。**減らしたら落ちる。** 替えたら、この数も上げる
 
 錨の免除 = {
     # 節の項の **先頭の太字**をそのまま鍵にする。⚠️ 文言を変えたら外れる —— それは正しい（別の主張だから）
@@ -313,7 +340,10 @@ def main():
     if 未被覆:
         print(f"  ③ 被覆        ▲ 台帳にも免除表にも無い量 {len(未被覆)} 件:")
         for doc, i, tok, key in 未被覆[:80]:
-            print(f"       {doc}:{i}  {tok}    ← 台帳に足すか claims.skip に理由付きで")
+            # ⚠️ **免除表に書く形そのもの**を出す。見た目のまま写すと空白と comma で当たらない
+            #    （実測 2026-09-06: 出力を写して貼り、一件だけ通らなかった）。
+            #    ◆ 道具の報告は、そのまま次の手に使えて初めて読める。
+            print(f"       {doc}:{i}  {tok}    ← claims.skip なら  {key}<TAB>理由<TAB>説明")
         if len(未被覆) > 80:
             print(f"       … 他 {len(未被覆)-80} 件")
     else:
@@ -324,12 +354,21 @@ def main():
             print(f"       {doc}:{i}  「{鍵}」  ← 台帳の一文を項に入れるか、錨の免除へ理由付きで")
     else:
         print(f"  ④ 錨          限界の節は全て門に裏打ちされている({len(錨の免除)} 件は理由付きで免除)")
+
+    符牒 = [r for r in rows if re.search(r"\\\[", r[5])]
+    足りない = len(符牒) < 符牒の床
+    if 足りない:
+        print(f"  ⑤ 錨の質      ⛔ **符牒に錨を取った門が減った** {len(符牒)} / 床 {符牒の床} —— "
+              f"人の一文に戻すと、その一文を直した日に静かに外れる")
+    else:
+        print(f"  ⑤ 錨の質      符牒に錨を取った門 {len(符牒)} / {len(rows)}"
+              + (f"（床 {符牒の床} を {len(符牒)-符牒の床} 上回った ⇒ 床も上げること）" if len(符牒) > 符牒の床 else "（床ちょうど）"))
     print()
     if 飛ばした:
         名 = sorted(set(w for _, w in 飛ばした))
         print(f"  ⚠ 飛ばした: {' / '.join(名)}")
         print( "     ⇒ 飛ばしが在るうちは「文書は門番に裏打ちされている」と言わない。")
-    if 落ちた or 未被覆 or 錨なし:
+    if 落ちた or 未被覆 or 錨なし or 足りない:
         print("\n  ✗ 判定: 文書と門番がずれている")
         return 1
     if 飛ばした:

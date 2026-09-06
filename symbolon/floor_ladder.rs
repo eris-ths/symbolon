@@ -386,6 +386,49 @@ fn run_c(ns: &[N], root: u32, mut regs: Vec<Option<Val>>, ar: &mut Arena, mut fu
 enum Ins {
     Lit(i64), Load(u32), Add, Sub, Eq, NilV, Cons, Car, Cdr, IsPair,
     Store(u32), JmpF(u32), Jmp(u32), Respawn(i32), Drop,
+    // ---- 畳んだ連なり(段D′)。**当て先は数えて選んだ** ---------------------------
+    // 実測 2026-09-06、sum 1..1000 の 610 万命令の内訳:
+    //   Load 25.5% / Lit 20.3% / Eq 19.8% / JmpF 13.9%  —— 上位四つで **79.5%**。
+    //   動的な四連なり `Load Lit Eq JmpF` が **787,565 回**(dispatch の 38.7% を占める)。
+    //   ◆ これは機械そのものの **命令選り分け**（op の番号を 14 個の定数と突き合わせる所）。
+    //     床の速さの問題ではなく、*機械が機械であること* の値段。だから連なりで出る。
+    EqK(u32, i64),            // Load(s); Lit(k); Eq
+    EqKJmpF(u32, i64, u32),   // Load(s); Lit(k); Eq; JmpF(t)
+    // 🔴 **跡地**。畳んでも列を縮めない —— 縮めると飛び先(添字)が全部ずれ、
+    //    「二箇所が一致していなければならない」形になる（段F の長さの表で一度払った型）。
+    //    ⇒ 畳んだ命令が自分で `pc` を跨がせる。跡地は **踏まれない**。
+    Nop,
+}
+
+/// 連なりを畳む(段D′)。◆ **添字は一つも動かさない。**
+/// ⚠️ 飛び先になっている位置は畳まない —— 途中へ飛び込まれると、跨ぎが効かず
+///   スタックの高さが合わなくなる。飛び先の集合を **列そのものから作る**（別表を持たない）。
+fn 畳む(code: &mut Vec<Ins>) -> usize {
+    let mut 的: Vec<bool> = vec![false; code.len() + 1];
+    for ins in code.iter() {
+        match *ins { Ins::JmpF(t) | Ins::Jmp(t) => 的[t as usize] = true, _ => {} }
+    }
+    let mut n = 0;
+    let mut i = 0usize;
+    while i + 2 < code.len() {
+        let 三 = matches!((code[i], code[i + 1], code[i + 2]),
+                          (Ins::Load(_), Ins::Lit(_), Ins::Eq)) && !的[i + 1] && !的[i + 2];
+        if !三 { i += 1; continue; }
+        let (s, k) = match (code[i], code[i + 1]) { (Ins::Load(s), Ins::Lit(k)) => (s, k), _ => unreachable!() };
+        let 四 = i + 3 < code.len() && matches!(code[i + 3], Ins::JmpF(_)) && !的[i + 3];
+        if 四 {
+            let t = match code[i + 3] { Ins::JmpF(t) => t, _ => unreachable!() };
+            code[i] = Ins::EqKJmpF(s, k, t);
+            code[i + 1] = Ins::Nop; code[i + 2] = Ins::Nop; code[i + 3] = Ins::Nop;
+            i += 4;
+        } else {
+            code[i] = Ins::EqK(s, k);
+            code[i + 1] = Ins::Nop; code[i + 2] = Ins::Nop;
+            i += 3;
+        }
+        n += 1;
+    }
+    n
 }
 
 fn emit_expr(ns: &[N], i: u32, out: &mut Vec<Ins>) {
@@ -422,53 +465,32 @@ fn emit_stmt(ns: &[N], i: u32, out: &mut Vec<Ins>) {
     }
 }
 
-/// 計数だけの走行(計測とは別建て。「床はもう底か」を ns/命令 で判定するため)。
-fn count_d(code: &[Ins], mut regs: Vec<Option<Val>>, ar: &mut Arena, mut fuel: i64) -> (u64, u64) {
+/// 床D の実行 —— **計数も実行もここ一つ**。
+///
+/// 🔴 かつて `count_d` と `run_d` が **十五の腕をそれぞれ持っていた**（違いは数え上げと戻り値だけ）。
+///   ◆ 「二箇所が一致していなければならない」形そのもの —— この repo はその型で二度払っている
+///     （memory 節を使用の隣に宣言した日 / 命令長の表が実体と一 byte ずれた日）。
+///   ⚠️ 2026-09-06、連なりを畳んだ時に **その両方へ四つの腕を足した**。増やす側に回っていた。
+///   ⇒ 一つにした。**代償は実測 6%**（16.5 → 17.6 ms、六本 vs 四本の走行で帯が重ならない）。
+///     ⚠️ `#[inline(always)]` で両方を完全に単相化しても戻らなかった ⇒ 単相化の漏れではなく、
+///       戻り値と生存区間が変わったことの値段。**測った上で払っている。**
+///   ◆ なぜ払うか: `count_d` の数は **台帳が門で守っている量**（塔の厚み）。二本立てのままだと、
+///     腕の意味が片方だけずれた時に *数だけ静かに間違う* —— 網は答えを見ているので気づかない。
+///     ⚠️ Rust の網羅検査は「腕の**取りこぼし**」は止めるが、「腕の**中身の食い違い**」は止めない。
+///   ▲ 分母が 6% 遅くなる = 塔の比が 6% 大きく出る。**看板を甘くする向き**なので、
+///     比はこの統一後の版で測り直して載せる（下の数はすべて統一後）。
+fn exec_d<const COUNT: bool>(code: &[Ins], mut regs: Vec<Option<Val>>, ar: &mut Arena,
+                             mut fuel: i64, vs: u32) -> (Option<Val>, u64, u64) {
     let mut st: Vec<Val> = Vec::with_capacity(64);
     let (mut ins, mut rounds) = (0u64, 0u64);
     let mut respawn = true;
     while respawn {
-        respawn = false; rounds += 1; st.clear();
-        let mut pc = 0usize;
-        while pc < code.len() {
-            ins += 1;
-            match code[pc] {
-                Ins::Lit(k) => st.push(Val::I(k)),
-                Ins::Load(s) => st.push(regs[s as usize].expect("計数: 未束縛")),
-                Ins::Add => { let b = st.pop().unwrap(); let a = st.pop().unwrap();
-                              match (a, b) { (Val::I(x), Val::I(y)) => st.push(Val::I(x + y)), _ => panic!("add non-int") } }
-                Ins::Sub => { let b = st.pop().unwrap(); let a = st.pop().unwrap();
-                              match (a, b) { (Val::I(x), Val::I(y)) => st.push(Val::I(x - y)), _ => panic!("sub non-int") } }
-                Ins::Eq => { let b = st.pop().unwrap(); let a = st.pop().unwrap();
-                             st.push(Val::I(if eq_v(ar, a, b) { 1 } else { 0 })) }
-                Ins::NilV => st.push(Val::Nil),
-                Ins::Cons => { let d = st.pop().unwrap(); let a = st.pop().unwrap(); let p = cons_a(ar, a, d); st.push(p) }
-                Ins::Car => { match st.pop().unwrap() { Val::P(i) => st.push(ar[i as usize].0), _ => panic!("car non-pair") } }
-                Ins::Cdr => { match st.pop().unwrap() { Val::P(i) => st.push(ar[i as usize].1), _ => panic!("cdr non-pair") } }
-                Ins::IsPair => { let v = st.pop().unwrap(); st.push(Val::I(if matches!(v, Val::P(_)) { 1 } else { 0 })) }
-                Ins::Store(s) => { let v = st.pop().unwrap(); regs[s as usize] = Some(v); }
-                Ins::Drop => { st.pop(); }
-                Ins::JmpF(t) => { let v = st.pop().unwrap(); if !truthy_v(v) { pc = t as usize; continue; } }
-                Ins::Jmp(t) => { pc = t as usize; continue; }
-                Ins::Respawn(g) => {
-                    if g >= 0 && !truthy_v(regs[g as usize].expect("計数: 未束縛")) { pc += 1; continue; }
-                    if fuel > 0 { fuel -= 1; respawn = true; }
-                }
-            }
-            pc += 1;
-        }
-    }
-    (ins, rounds)
-}
-
-fn run_d(code: &[Ins], mut regs: Vec<Option<Val>>, ar: &mut Arena, mut fuel: i64, vs: u32) -> Val {
-    let mut st: Vec<Val> = Vec::with_capacity(64);
-    let mut respawn = true;
-    while respawn {
         respawn = false;
+        if COUNT { rounds += 1; }
         st.clear();
         let mut pc = 0usize;
         while pc < code.len() {
+            if COUNT { ins += 1; }
             match code[pc] {
                 Ins::Lit(k) => st.push(Val::I(k)),
                 Ins::Load(s) => st.push(regs[s as usize].expect("床D: 未束縛 register")),
@@ -491,13 +513,38 @@ fn run_d(code: &[Ins], mut regs: Vec<Option<Val>>, ar: &mut Arena, mut fuel: i64
                     if g >= 0 && !truthy_v(regs[g as usize].expect("床D: 未束縛 register")) { pc += 1; continue; }
                     if fuel > 0 { fuel -= 1; respawn = true; }
                 }
+                Ins::Nop => {}
+                // 畳んだ連なり —— 自分で跡地を **跨ぐ**（列は縮めていないので添字は元のまま）
+                Ins::EqK(sl, k) => {
+                    let a = regs[sl as usize].expect("床D: 未束縛 register");
+                    // ⚠️ 比べる所を書き直さない。**eq_v を通す** —— 意味の口は一つ。
+                    st.push(Val::I(if eq_v(ar, a, Val::I(k)) { 1 } else { 0 }));
+                    pc += 3; continue;
+                }
+                Ins::EqKJmpF(sl, k, t) => {
+                    let a = regs[sl as usize].expect("床D: 未束縛 register");
+                    pc = if eq_v(ar, a, Val::I(k)) { pc + 4 } else { t as usize };
+                    continue;
+                }
             }
             pc += 1;
         }
     }
-    regs[vs as usize].expect("床D: vs 未束縛")
+    (regs.get(vs as usize).copied().flatten(), ins, rounds)
 }
 
+
+
+fn run_d(code: &[Ins], regs: Vec<Option<Val>>, ar: &mut Arena, fuel: i64, vs: u32) -> Val {
+    exec_d::<false>(code, regs, ar, fuel, vs).0.expect("床D: vs 未束縛")
+}
+
+/// 計数だけの走行(計測とは別建て。「床はもう底か」を ns/命令 で判定するため)。
+/// ⚠️ **畳む前の列**に当てると *塔の厚み*、畳んだ後の列に当てると *床の手数* —— 別の量(三十八段)。
+fn count_d(code: &[Ins], regs: Vec<Option<Val>>, ar: &mut Arena, fuel: i64) -> (u64, u64) {
+    let (_, ins, rounds) = exec_d::<true>(code, regs, ar, fuel, u32::MAX);
+    (ins, rounds)
+}
 
 // ==== 塔を畳む: object 程式(td)を読むための小道具 ================================
 // object 値は pair の入れ子。tag = car、payload = cdr。tag 表は kokkos.enc_expr が正:
@@ -1010,6 +1057,8 @@ fn kname(k: Kind) -> &'static str { match k { Kind::Int => "int", Kind::List => 
 //      語として入れ替えてよい理由にならない。契約(op / machine.json)は一文字も変わらない。
 
 struct WComp {
+    /// 詰めた文字列を **作らない**（`if` の枝で形が割れた時だけ立てる。下の IF を見よ）。
+    no_intern: bool,
     b: Vec<u8>, env: Vec<(i64, Bind)>, nslots: u32, outer: Vec<(i64, Where)>,
     fns: Vec<(i64, Json, usize)>, depth: u32,   // 三つ目 = **定義時の env の長さ**(閉包の捕捉)
     kinds: HashMap<u32, Kind>,        // スロット → 値の形(静的に推した)
@@ -1027,7 +1076,7 @@ struct WComp {
 
 impl WComp {
     fn new() -> WComp {
-        WComp { b: Vec::new(), env: Vec::new(), nslots: 0, outer: Vec::new(),
+        WComp { no_intern: false, b: Vec::new(), env: Vec::new(), nslots: 0, outer: Vec::new(),
                 fns: Vec::new(), depth: 0, kinds: HashMap::new(), heap: None,
                 own: 0, peak: true, root: None, owned: HashMap::new(),
                 regions: Vec::new(), foreign_list_write: false, pool: Vec::new(), tstr: None,
@@ -1141,6 +1190,16 @@ impl WComp {
         if !is_p(n) || pnum(pcar(n)) != ntag::LIT { return None; }
         let v = pnum(pcdr(n));
         if (0..=255).contains(&v) { Some(v) } else { None }
+    }
+
+    /// `if` の両枝を吐いて、それぞれの形を返す。
+    /// ◆ **口は一つ** —— 巻き戻して吐き直す時も、必ずこの同じ道を通す。
+    fn emit_both(&mut self, arg: &Json) -> Result<(Kind, Kind), String> {
+        let t = self.emit_val(pcar(pcdr(arg)))?;
+        self.op(0x05);
+        let f = self.emit_val(pcdr(pcdr(arg)))?;
+        self.op(0x0B);
+        Ok((t, f))
     }
 
     fn as_static_str(n: &Json) -> Option<Vec<u8>> {
@@ -1260,7 +1319,7 @@ impl WComp {
                    Self::want(Kind::Int, a, "eq")?; Self::want(Kind::Int, b, "eq")?;
                    self.op(0x51); self.op(0xAD); Kind::Int }                               // i64.eq → extend
             ntag::NIL => { self.op(0x42); self.b.push(0x00); Kind::List }                          // nil = 番地 0
-            ntag::CONS if Self::as_static_str(n).is_some() => {   // 段G‴: 静的な文字列は **詰めて置く**
+            ntag::CONS if !self.no_intern && Self::as_static_str(n).is_some() => {   // 段G‴: 静的な文字列は **詰めて置く**
                 let bytes = Self::as_static_str(n).unwrap();
                 let v = self.intern(&bytes);
                 self.op(0x42); sleb(v, &mut self.b);                                       // i64.const (番地<<32|長さ)
@@ -1374,12 +1433,30 @@ impl WComp {
             ntag::IF => { let c = self.emit_val(pcar(arg))?; Self::want(Kind::Int, c, "if の条件")?;
                    self.op(0x42); self.b.push(0x00); self.op(0x52);
                    self.op(0x04); self.b.push(0x7E);                                       // if (result i64)
-                   let t = self.emit_val(pcar(pcdr(arg)))?;
-                   self.op(0x05);
-                   let f = self.emit_val(pcdr(pcdr(arg)))?;
-                   self.op(0x0B);
-                   if t != f { return Err("if の両枝で値の形が違う".into()); }
-                   t }
+                   // 🔴 枝で形が割れる一番多い理由は **要素の値**（2026-09-06、差分ファズが掴んだ）。
+                   //   `if c then cons(3,cons(4,nil)) else cons(300,nil)` —— 前者は byte に収まるので
+                   //   段G‴ が **詰めて Str** にし、後者は List のまま ⇒ 同じ「list を返す if」なのに断っていた。
+                   //   ◆ Str は list の *置き方* であって別の型ではない ⇒ **割れたら詰めるのをやめて揃える。**
+                   //   ⚠️ 予測しない。**同じ emit をもう一度通す** —— 形を先読みする関数を別に持つと、
+                   //     それは吐く側と食い違いうる二つ目の口になる（長さの表で一度やった型）。
+                   //   ▲ 巻き戻しは枝の *全体* に効く ⇒ 割れた if の下の関係ない文字列も開かれる（遅いが正しい）。
+                   //   ▲ 巻き戻すのは **b(吐いた byte)だけ** —— 一周目に取った局所と池の文字は残る
+                   //     （使われない局所と、誰も指さない data の数 byte）。正しさには効かない。場所だけ。
+                   let mark = self.b.len();
+                   let (t, f) = self.emit_both(arg)?;
+                   if t == f { t } else {
+                       if !matches!((t, f), (Kind::Str, Kind::List) | (Kind::List, Kind::Str)) {
+                           return Err("if の両枝で値の形が違う".into());
+                       }
+                       self.b.truncate(mark);
+                       let 元 = self.no_intern;
+                       self.no_intern = true;
+                       let r = self.emit_both(arg);
+                       self.no_intern = 元;              // ⚠️ 落ちても必ず戻す（外側の枝を巻き込まない）
+                       let (t2, f2) = r?;
+                       if t2 != f2 { return Err("if の両枝で値の形が違う".into()); }
+                       t2
+                   } }
             ntag::GETBOX => { let s = self.box_slot(arg)?; self.op_u(0x20, s); self.slot_kind(s) }
             ntag::SETBOX => { let s = self.box_slot(pcar(arg))?; let want = self.slot_kind(s);
                     let k = self.emit_val(pcdr(arg))?; Self::want(want, k, "setbox")?;
@@ -1656,6 +1733,12 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
             let vs = nm.intern("vs");
             let mut mcode: Vec<Ins> = Vec::new();
             emit_stmt(&ns, root, &mut mcode);
+            // 🔴 **走る列と数える列を分ける**（2026-09-06）。畳むと dispatch は減るが、
+            //   `count_d` が数えているのは *塔の厚み*（機械の意味が要求する仕事の量）で、
+            //   畳んで減るのは *床の手数* —— **別の量**。混ぜると「塔が薄くなった」と読めてしまう。
+            //   ⇒ 数えるのは畳む前、走らせるのは畳んだ後。名前で分ける。
+            let mut mcode_run = mcode.clone();
+            畳む(&mut mcode_run);
 
             let pj = P::new(&fs::read_to_string(file).expect("probe json")).val();
             let (mut hj, mut expect, mut n) = (Json::Num(0), V::I(0), 0i64);
@@ -1670,7 +1753,7 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
             for _ in 0..3 {
                 let mut ar: Arena = Vec::new(); let hd = host_cd(&hj, &mut nm, &mut ar);
                 let t = Instant::now();
-                let v = run_d(&mcode, hd, &mut ar, 100_000_000, vs);
+                let v = run_d(&mcode_run, hd, &mut ar, 100_000_000, vs);
                 td_ms = td_ms.min(t.elapsed().as_secs_f64() * 1000.0);
                 cells_d = ar.len(); rd = top(val_to_v(&ar, v));
             }
@@ -1894,11 +1977,14 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
     let t_emit = Instant::now();
     let mut code: Vec<Ins> = Vec::new();
     emit_stmt(&ns, root, &mut code);
+    let mut code_run = code.clone();          // 走らせる列（畳む）。`code` は **数える列**（畳まない）
+    let 畳んだ = 畳む(&mut code_run);
     let emit_ms = t_emit.elapsed().as_secs_f64() * 1000.0;
 
     println!("== 床の梯子 A→D —— 同じ 14-op 契約・同じ machine.json ==\n");
     println!("  畳み: 節 {} 個 / register {} スロット / {:.2} ms", ns.len(), nm.len(), build_ms);
-    println!("  線形: 命令 {} 個 / {:.2} ms(どちらも実行前に一度だけ)\n", code.len(), emit_ms);
+    println!("  線形: 命令 {} 個 / {:.2} ms(どちらも実行前に一度だけ)  ※ 走る列は連なり {} 組を畳んである\n",
+             code.len(), emit_ms, 畳んだ);
 
     // ---- 四床 differential ----
     let (mut pass, mut bad) = (0, 0);
@@ -1916,7 +2002,7 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
             let rc_ = { let v = run_c(&ns, root, hc, &mut arc, 1_000_000, vs); top(val_to_v(&arc, v)) };
             let mut ard: Arena = Vec::new();
             let hd = host_cd(&hj, &mut nm, &mut ard);
-            let rd = { let v = run_d(&code, hd, &mut ard, 1_000_000, vs); top(val_to_v(&ard, v)) };
+            let rd = { let v = run_d(&code_run, hd, &mut ard, 1_000_000, vs); top(val_to_v(&ard, v)) };
 
             let agree = deep_eq(&ra, &rb) && deep_eq(&rb, &rc_) && deep_eq(&rc_, &rd);
             let ok = deep_eq(&rd, &expect);
@@ -1952,7 +2038,7 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
         cells_c = arc.len(); rc_ = top(val_to_v(&arc, vc));
 
         let mut ard: Arena = Vec::new(); let hd = host_cd(&hj, &mut nm, &mut ard);
-        let t = Instant::now(); let vd = run_d(&code, hd, &mut ard, 1_000_000, vs);
+        let t = Instant::now(); let vd = run_d(&code_run, hd, &mut ard, 1_000_000, vs);
         td_ms = td_ms.min(t.elapsed().as_secs_f64() * 1000.0);
         cells_d = ard.len(); rd = top(val_to_v(&ard, vd));
     }
@@ -1972,10 +2058,25 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
         let mut arn: Arena = Vec::new();
         let hn = host_cd(&hj, &mut nm, &mut arn);
         let (ins, rounds) = count_d(&code, hn, &mut arn, 1_000_000);
+        // 🔴 **二つの量を分けて数える**（2026-09-06、連なりを畳んだ日に分かれた）。
+        //   `ins` = 畳む前 = 機械の意味が要求する仕事 = **塔の厚み**。畳んでも減らない。
+        //   `手数` = 畳んだ後 = 床が実際に dispatch した回数 = **床の手数**。
+        //   ⚠️ 前は一つの数で両方を名乗っていた。畳んだ瞬間、その名は範囲を偽る
+        //     ——「実際に回した命令」と書いてある数が、実際に回した数でなくなる。
+        let mut arm: Arena = Vec::new();
+        let hm = host_cd(&hj, &mut nm, &mut arm);
+        let (手数, _) = count_d(&code_run, hm, &mut arm, 1_000_000);
         let ns_per = td_ms * 1e6 / ins as f64;
-        println!("\n  床D が実際に回した命令: {} 個(trampoline {} 周)⇒ {:.2} ns/命令 ≈ {:.1} cycles @3GHz",
+        let ns_手 = td_ms * 1e6 / 手数 as f64;
+        // ⚠️ 数の隣に **符牒**を置く。門は符牒で錨を取る —— 文言に錨づけると、
+        //   言い方を正した日に静かに外れる（2026-09-05 に一度、2026-09-06 にもう一度踏んだ型）。
+        println!("\n  床D 塔の厚み(畳む前): {} 命令 [D-tower](trampoline {} 周)⇒ {:.2} ns/意味命令 ≈ {:.1} cycles @3GHz",
                  ins, rounds, ns_per, ns_per * 3.0);
-        println!("     switch dispatch 型 VM の実用下限は概ね 1〜3 ns/命令 ⇒ 床にはまだ 1.5〜3x 程度が残る。");
+        println!("     床の手数(畳んだ後):   {} dispatch [D-dispatch] ⇒ {:.2} ns/dispatch —— **{:.1}% を畳みで落とした**",
+                 手数, ns_手, (ins - 手数) as f64 * 100.0 / ins as f64);
+        println!("     ◆ 当て先は数えて選んだ: 動的な四連なり `Load Lit Eq JmpF`(＝機械の命令選り分け)が");
+        println!("       単独で dispatch の 38.7% を占めていた。畳んで 25.6 → {:.1} ms。", td_ms);
+        println!("     ⚠️ 畳んでも **塔の厚みは 1 命令も減っていない**。減ったのは床の手数だけ。");
         println!("     ▲ だが本題はそこではない —— **ループ 1 反復(加算1+減算1+条件1)あたり床命令 {:.0} 個**。",
                  ins as f64 / 1000.0);
         println!("        この {:.0}x は塔(機械そのものの解釈)の厚みで、床をどれだけ磨いても減らない。",
@@ -2036,7 +2137,7 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
     let f_ok = jit_res.is_ok() && deep_eq(&vf, &expect);
     println!("  段E 特殊化命令列 : {:>9.4} ms   結果 {} ({})   実行命令 {} 個 = 1 反復あたり {:.0} 個",
              te, show(&ve), if e_ok { "一致" } else { "✗ 不一致" }, ins_e, ins_e as f64 / n as f64);
-    println!("       ⇒ {:.2} ns/命令(床D の実測 4.0 と同水準 = VM の下限は本当にこの辺)/ {:.1} ns/反復",
+    println!("       ⇒ {:.2} ns/命令(床D の ns/dispatch と同水準 = VM の下限は本当にこの辺)/ {:.1} ns/反復",
              te * 1e6 / ins_e as f64, te * 1e6 / n as f64);
     println!("       ⇒ **arena {} セル**。効果位置の cons(値が死んでいる列)は確保ごと消えた。", cells_e);
     if jit_res.is_ok() {

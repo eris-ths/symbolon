@@ -27,7 +27,9 @@ if (instance.exports.memory) {
   peak = Number(m[0]); cells = peak ? (peak - 16) / 16 : 0;
 }
 const ok = String(r) === String(want);
-console.log(`  段G′ 実走: ${r} (期待 ${want}) ${ok ? "✓ 一致" : "✗ 不一致"} / ${best.toFixed(5)} ms / wasm ${bin.length} B(温めた後の best-of-5)`);
+// ⚠️ 錨は **符牒**であって文言ではない —— 門をこの一文に錨づけると、言い方を正した日に静かに外れる
+//    （2026-09-05 に一度、2026-09-06 に `床D が実際に回した命令` でもう一度踏んだ）。
+console.log(`  段G′ 実走: ${r} (期待 ${want}) ${ok ? "✓ 一致 [RUN ok]" : "✗ 不一致 [RUN bad]"} / ${best.toFixed(5)} ms / wasm ${bin.length} B(温めた後の best-of-5)`);
 console.log(`        線形性: 呼び 10x で時間 ${scaled.toFixed(1)}x ⇒ ${scaled > 5 ? "本当に走っている" : "⚠️ 消えている疑い"}`);
 if (peak !== "—") console.log(`        heap の峰: ${peak} B = **${cells} セル**`);
 process.exit(ok ? 0 : 1);

@@ -62,11 +62,13 @@ These appear throughout. They are load-bearing, not decoration.
 | integer loop (`sum 1..1000`) | 6,103,390 → 15,011 | **407×** |
 | closure-heavy (300 non-escaping closures) | 2,350,010 → 5,711 | **411×** |
 | cons-heavy (build a 300-cell list, fold it) | 3,967,486 → 9,320 | **426×** |
+| string-heavy (a 47-character string, ×20) | 7,250,554 → 17,331 | **418×** |
 
 | artifact | size |
 |---|---|
 | wasm (integer loop / closure) | **100 B** / **107 B** |
 | wasm with a bump heap (cons-heavy) | **226 B** |
+| wasm for the string-heavy program (literal packed into the data section) | **256 B** |
 | x86-64 machine code, hand-encoded, `mmap` + W^X | **102 B** |
 | engine module (state + `step`) | **133 B** |
 | self-contained HTML, wasm inlined as base64 | **2,694 B** |
