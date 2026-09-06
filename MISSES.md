@@ -254,9 +254,38 @@ walked straight past it for as long as the prose was wrong.
 
 ---
 
+## 11. "The gates cover the repository"
+
+**Measured: the commit message is outside the repository, and no gate reads it.**
+
+The previous projection's message ended with a line saying the ledger had gone from one count
+to another. The second number was right. The first was written from memory and was wrong — it
+was the starting point of an earlier step, two rungs back. It is now in the public history,
+where it cannot be corrected in place, because the shadow's history is appended one projection
+at a time and never rewritten.
+
+🔴 The irony is exact: that message's own body describes a ratchet that only held the shape it
+was cut for, and the message itself sat outside a different one. Every number *inside* the
+tree is re-derived by a gate. A number in the text *about* the tree had nothing watching it.
+
+The projection tool now reads counts out of **both trees** — the one currently published and
+the one about to be — and checks any "A → B" claim against them.
+
+▲ The naive version of this check would not have caught it. Verifying only the new value passes
+a message whose *old* value is wrong, which is exactly the shape of this miss. The check was
+written against the actual failing text first, and only then generalised.
+
+▲ Two things went wrong while building it, both caught by running rather than reading. Pointing
+the "before" side at the published clone gave the wrong baseline, because the projection
+overwrites that clone before the message is written; the baseline is now read from git by ref.
+And the first version printed a pass when it had measured nothing — the one shape this
+repository refuses everywhere else, reproduced inside the tool built to prevent it.
+
+---
+
 ## Misses of a different kind
 
-The ten above are predictions about the system. These are about us, and they recur:
+The eleven above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|
