@@ -121,9 +121,48 @@ output we only ever checked for the word `error`.
 
 ---
 
+## 7. "Four gates on that stage is decent coverage"
+
+**Measured: a program that reads a pair without ever building one produced a module that
+would not load at all — and the ladder called it folded.**
+
+Entry 6 ended on a type: a gate covers the programs it runs, not the language it was written
+for. Adding a probe by hand only covers the shape you thought of, so the next step was to stop
+thinking of shapes. `fuzz.py` builds small programs from a fixed seed, takes the expected value
+from the Python floor, folds each one, and **runs the wasm that comes out** — in all three
+reclaim modes.
+
+The first widened run found this: a box holding `nil`, walked by a loop that never iterates.
+The loop body reads `car`, so the compiler emits a memory load; nothing ever calls `cons`, so
+the bump heap is never claimed; and the module declared its memory only when the heap had been
+claimed. The output was a `.wasm` file the ladder announced as folded and no runtime will
+instantiate — *"memory index 0 exceeds number of declared memories (0)"*.
+
+🔴 The declaration of a resource was written **next to** its use rather than **derived from**
+it. Two places had to agree, and one of them was updated the day memory was introduced and
+never again. Memory use now goes through a single call that sets the flag the declaration
+reads, so the two cannot drift.
+
+The gate is the fuzzer itself, pinned to a seed so it is reproducible.
+Shooting `--n 120 --seed 20260906 --depth 4` agrees on 351 runs, declining 9 of them.
+The declines are the prepend case from entry 5, still refused rather than compiled; the count
+is gated too, so a silent widening of what the compiler declines shows up as a number.
+
+▲ Shooting the fuzzer at the *previous* build was the check that the fuzzer works at all: it
+finds the nesting bug of entry 6 in 40 programs. A test suite that has never failed is a test
+suite of unknown strength.
+
+▲ Two smaller things, both self-inflicted and both caught by running rather than reading.
+Two fuzz runs started at once fought over the same scratch filenames and one deleted the
+other's compiler; scratch paths now carry the process id. And the two ledger numbers above
+were first written from a guess and corrected to the measurement before they shipped —
+the shape of miss this file exists to record, caught one step earlier than usual.
+
+---
+
 ## Misses of a different kind
 
-The six above are predictions about the system. These are about us, and they recur:
+The seven above are predictions about the system. These are about us, and they recur:
 
 | what happened | the type |
 |---|---|
@@ -134,6 +173,7 @@ The six above are predictions about the system. These are about us, and they rec
 | a gate's own patterns were written without ever running that gate; three of them were wrong | **The contents of a gate you have never fired are unverified.** |
 | a summary line read "all stages agree" while one of the stages had never been run | **A check must not claim more ground in its name than it covers in its body.** |
 | a compiler warning had been printing on every build for as long as anyone could remember | **A warning nobody reads is not a warning. Build clean, or it is decoration.** |
+| a resource was declared in one place and used in another, and the two drifted | **Derive the declaration from the use. Two places that must agree will not.** |
 
-◆ All seven are the same shape: **existing and working are different.** The gates in this
+◆ All eight are the same shape: **existing and working are different.** The gates in this
 repository exist because of them.

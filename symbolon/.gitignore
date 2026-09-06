@@ -5,3 +5,7 @@
 __pycache__/
 node_modules/
 package*.json
+
+# 差分ファザーの足場（pid 付き。走行ごとに自分の分だけ片付けるが、落ちた時に残りうる）
+fuzz_*.json
+.fuzz_ladder.*

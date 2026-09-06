@@ -818,6 +818,7 @@ struct WComp {
     owned: HashMap<u32, i64>,         // 一意所有と判定した box スロット → その var id
     pool: Vec<u8>,                    // リテラル文字列の実体。線形メモリの 16 番地から置く
     tstr: Option<u32>,                // str を二度使う時の控え
+    mem: bool,                        // 線形メモリを触ったか —— module に memory を宣言するかを決める唯一の根拠
 }
 
 impl WComp {
@@ -825,13 +826,24 @@ impl WComp {
         WComp { b: Vec::new(), env: Vec::new(), nslots: 0, outer: Vec::new(),
                 fns: Vec::new(), depth: 0, kinds: HashMap::new(), heap: None,
                 own: 0, peak: true, root: None, owned: HashMap::new(),
-                regions: Vec::new(), foreign_list_write: false, pool: Vec::new(), tstr: None }
+                regions: Vec::new(), foreign_list_write: false, pool: Vec::new(), tstr: None,
+                mem: false }
     }
     fn slot(&mut self) -> u32 { let s = self.nslots; self.nslots += 1; s }
     fn look(&self, id: i64) -> Option<Bind> { self.env.iter().rev().find(|(i, _)| *i == id).map(|(_, b)| *b) }
     fn op(&mut self, o: u8) { self.b.push(o); }
     fn op_u(&mut self, o: u8, x: u32) { self.b.push(o); uleb(x, &mut self.b); }
-    fn u(&mut self, x: u32) { uleb(x, &mut self.b); }
+    // ⚠️ ここに `u`(= 生の uleb を b へ足す)が在った。memop へ通した結果 **誰も呼ばなくなった**。
+    //    今日の三つ目の死んだ口。⇒ **warning 0 で建てる**を条件にしたので、その場で鳴った。
+    /// 線形メモリを触る命令は **必ずここを通す**。
+    /// ⚠️ 触る所と「memory を宣言する所」が離れていると、宣言し忘れても *静かに通る* ——
+    ///   実測 2026-09-06: `car` だけして `cons` しない程式（箱が nil で while が一度も回らない）で、
+    ///   梯子は「畳めた」と報告しつつ **instantiate できない wasm** を書いていた。
+    ///   ◆ 宣言は *使用から導く*。並べて置くと、片方だけ足し忘れる。
+    fn memop(&mut self, o: u8, align: u8, off: u32) {
+        self.mem = true;
+        self.b.push(o); self.b.push(align); uleb(off, &mut self.b);
+    }
 
     /// pair 用の bump heap を使う —— 控えの local を一度だけ確保する。
     fn heap_locals(&mut self) -> (u32, u32, u32) {
@@ -993,7 +1005,7 @@ impl WComp {
                 for (off, loc) in [(0u32, ta), (8, td)] {
                     self.op_u(0x20, hp); self.op(0xA7);                                    // i32.wrap_i64
                     self.op_u(0x20, loc);
-                    self.op(0x37); self.b.push(0x03); self.u(off);                         // i64.store
+                    self.memop(0x37, 0x03, off);                                           // i64.store
                 }
                 self.op_u(0x20, hp);                                                       // 値 = 番地
                 self.op_u(0x20, hp); self.op(0x42); self.b.push(0x10); self.op(0x7C); self.op_u(0x21, hp);
@@ -1005,12 +1017,12 @@ impl WComp {
                 //    「未対応 opcode 0x4 @body」)。block + br_if は持つので、そちらの形で書く。
                 self.op(0x02); self.b.push(0x40);                                          // block(void)
                 self.op_u(0x20, hp);
-                self.op(0x41); self.b.push(0x00); self.op(0x29); self.b.push(0x03); self.b.push(0x00);
+                self.op(0x41); self.b.push(0x00); self.memop(0x29, 0x03, 0);
                 self.op(0x55);                                                             // i64.gt_s
                 self.op(0x45);                                                             // i32.eqz(偽なら抜ける)
                 self.op_u(0x0D, 0);                                                        // br_if 0
                 self.op(0x41); self.b.push(0x00); self.op_u(0x20, hp);
-                self.op(0x37); self.b.push(0x03); self.b.push(0x00);                       // i64.store
+                self.memop(0x37, 0x03, 0);                                                 // i64.store
                 self.op(0x0B);
                 }
                 Kind::List
@@ -1021,8 +1033,8 @@ impl WComp {
                 if x != Kind::Str {
                     Self::want(Kind::List, x, "car/cdr/pair?")?;
                     return Ok(match tag {
-                        9 | 10 => { self.op(0xA7); self.op(0x29); self.b.push(0x03);        // i32.wrap / i64.load
-                                    self.u(if tag == 9 { 0 } else { 8 });
+                        9 | 10 => { self.op(0xA7);                                          // i32.wrap
+                                    self.memop(0x29, 0x03, if tag == 9 { 0 } else { 8 });   // i64.load
                                     if tag == 9 { Kind::Int } else { Kind::List } }
                         _ => { self.op(0x42); self.b.push(0x00); self.op(0x52); self.op(0xAD); Kind::Int }
                     });
@@ -1031,7 +1043,7 @@ impl WComp {
                 match tag {
                     9 => { // car = 先頭の byte。番地 = v >>> 32
                         self.op(0x42); self.b.push(32); self.op(0x88);                     // i64.const 32 / i64.shr_u
-                        self.op(0xA7); self.op(0x2D); self.b.push(0x00); self.b.push(0x00); // i32.wrap / i32.load8_u
+                        self.op(0xA7); self.memop(0x2D, 0x00, 0);                           // i32.wrap / i32.load8_u
                         self.op(0xAD); Kind::Int }                                          // i64.extend_i32_u
                     10 => { // cdr = (番地+1, 長さ-1)。長さ 0 なら nil(=0)。
                         let t = self.tmp_str(); self.op_u(0x22, t);                         // local.tee
@@ -1069,7 +1081,7 @@ impl WComp {
                     match self.outer.iter().find(|(i, _)| *i == id).map(|(_, w)| *w) {
                         Some(Where::Param(p)) => { self.op_u(0x20, p); Kind::Int }
                         Some(Where::Mem(s)) => { self.op(0x41); sleb((s as i64) * 8, &mut self.b);
-                                                 self.op(0x29); self.b.push(0x03); self.b.push(0x00); Kind::Int }
+                                                 self.memop(0x29, 0x03, 0); Kind::Int }
                         None => return Err(format!("未束縛の var id {}", id)),
                     }
                 }
@@ -1131,7 +1143,7 @@ impl WComp {
                 if self.own == 1 && is_consume && self.owned.contains_key(&s) {
                     let (hp, ta, _) = self.heap_locals();
                     self.op_u(0x20, s); self.op_u(0x22, ta);                    // 旧 head を控える
-                    self.op(0xA7); self.op(0x29); self.b.push(0x03); self.b.push(0x08);  // cdr
+                    self.op(0xA7); self.memop(0x29, 0x03, 8);                            // cdr
                     self.op_u(0x21, s);                                         // x := cdr(x)
                     // 返せるのは **積んだ順の逆(LIFO)** の時だけ —— 頂なら hp を戻す
                     self.op(0x02); self.b.push(0x40);                           // block(void)
@@ -1262,7 +1274,9 @@ fn main() {
         let mut wc = WComp::new();
         wc.emit_val(prog).expect("段G: 畳めない");
         wc.finish();
-        let pages = if wc.heap.is_some() || !wc.pool.is_empty() { Some(16) } else { None };
+        // ⚠️ `heap.is_some()` で決めていた —— **cons しないが car する**程式を落としていた。
+        //    memory を要るのは *触ったか* であって、*積んだか* ではない（池は data 節が要るので別枠）。
+        let pages = if wc.mem || !wc.pool.is_empty() { Some(16) } else { None };
         let module = wasm_module_d(&wc.b, wc.nslots, pages, &wc.pool);
         fs::write("compiled.wasm", &module).unwrap();
 
@@ -1381,7 +1395,9 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
             wc.root = Some(prog.clone());
             let g_res = wc.emit_val(prog).map(|_| {
                 wc.finish();
-                let pages = if wc.heap.is_some() || !wc.pool.is_empty() { Some(16) } else { None };
+                // ⚠️ `heap.is_some()` で決めていた —— **cons しないが car する**程式を落としていた。
+        //    memory を要るのは *触ったか* であって、*積んだか* ではない（池は data 節が要るので別枠）。
+        let pages = if wc.mem || !wc.pool.is_empty() { Some(16) } else { None };
                 let m = wasm_module_d(&wc.b, wc.nslots, pages, &wc.pool);
                 let name = file.replace(".json", &format!("{}{}",
                     match wc.own { 2 => ".own2", 1 => ".own", _ => "" },

@@ -70,6 +70,12 @@ def 建てる():
     #    （cache の並び順に頼っていた —— 脆かった）。
     "str_run":   (["node", "probe_run.mjs", "probe_str.wasm", "87320"], ("後に", "str")),
     "nest_run":  (["node", "probe_run.mjs", "probe_nest.wasm", "702"], ("後に", "nest")),
+    # 🔴 **書かれた言語の側から撃つ門**(2026-09-06)。手で置いた probe は「思いついた形」しか覆えない
+    #    ⇒ 種を固定した差分ファズで、形の方を機械に作らせる。⚠️ 種と本数は決め打ち（再現できないと門にならない）。
+    #    ⚠️ 前提は **言語実装が木に在ること**。影には出さない物なので、公開では skip と名乗る
+    #      （門⑥ と同じ理由）。「撃てない」と「撃って壊れた」を混ぜない。
+    "fuzz":      (["python3", "fuzz.py", "--n", "120", "--seed", "20260906", "--depth", "4"],
+                  ("file", "../experiments/third/kokkos.py")),
     "icount":    (["bash", "icount.sh"],                             ("env", "ERIS_EXP03")),
 }
 

@@ -65,3 +65,5 @@ str/前置/断り	symbolon/MISSES.md	must report `REFUSE ⟦str-prepend⟧`	prep
 str/箱/断り	symbolon/MISSES.md	must report `REFUSE ⟦str-as-list⟧`	strbox	段G′ \*\*吐けない\*\*.*\[REFUSE (str-as-list)\]
 cons/入れ子/実走	symbolon/MISSES.md	`node probe_run.mjs probe_nest.wasm ⟦702⟧`	nest_run	段G′ 実走: (\d+) \(期待 702\) ✓ 一致
 cons/入れ子/峰	symbolon/MISSES.md	a heap peak of `⟦9⟧ cells`	nest_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
+形/ファズ/一致	symbolon/MISSES.md	`--n 120 --seed 20260906 --depth 4` agrees on ⟦351⟧	fuzz	一致 (\d+) / 食い違い 0
+形/ファズ/断り	symbolon/MISSES.md	declining ⟦9⟧ of them	fuzz	食い違い 0 / 断り (\d+)
