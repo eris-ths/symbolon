@@ -11,12 +11,13 @@ as a row, with that column filled in, or it does not arrive.
 
 | instrument | fire it with | what it can say | ▲ what it cannot say |
 |---|---|---|---|
-| **the suite** | `bash promote.sh` | whether all seven gates pass on this tree, reported as `passed / failed / skipped` | whether a *skipped* gate would have passed. The run refuses to say "promotable" while any gate merely did not run — ⚠️ **a skip is never read as a pass** |
+| **the suite** | `bash promote.sh` | whether all eight gates pass on this tree, reported as `passed / failed / skipped` | whether a *skipped* gate would have passed. The run refuses to say "promotable" while any gate merely did not run — ⚠️ **a skip is never read as a pass** |
 | **the ledger** | `python3 claims.py` | that every number in these documents still matches the tool that produced it, and that no new bare claim has been added | that a number is *right*. It compares the document against the tool; if both are wrong the same way, they agree |
 | **the ladder** | `rustc -O floor_ladder.rs -o /tmp/fl` then `/tmp/fl`, `--probe probe_cons.json`, `--web`, `--engine` | instruction counts before and after folding, arena cell counts, and the byte size of every emitted artifact | wall-clock. Counts are deterministic; times move ±40% between runs on the same code, so ratios are reported only within one run |
 | **a real engine, a real browser** | `node probe_run.mjs probe_clos.wasm 45750`, `node web_verify.mjs`, `node engine_verify.mjs` | that the emitted module computes the expected value outside our own runner, and that a browser loads the page and clicks it | anything, when Node or a browser is missing. Two gates then skip — and the suite says so rather than passing |
 | **the deterministic counter** | `ERIS_EXP03=/path/to/exp/03-wasm-userland bash icount.sh` | byte-identical instruction counts for every emitted ROM, from a sister runtime we did not write | anything without that runtime. 🔴 The first time we could fire it, three of the ledger's own patterns turned out to be wrong — they had been written for a gate that had never once run (`MISSES.md`) |
 | **the engine, on that same instrument** | `{ printf 'v'; cat engine_probe.wasm; } \| futh`, and `engine_probe` in the ROM list of `icount.sh` | the value and the instruction count of the engine's own function body, replayed against the truth trace the reference floor produced. No expected value is written twice — the driver reads the trace | that *the seam* was measured. The seam exports `step` and `memory`; the sister runtime enters at `run`. ⚠️ Widening the seam to fit the instrument would trade a published promise for convenience, so the ladder emits a second module from the same body, exporting `run` and `kernel` only — a thing you measure and a thing you hand over should not answer to the same name |
+| **the walker's own coverage** | `bash walker.sh` | which entries of the opcode walker's table the emitted modules actually step on, and which have never been stepped on at all. ⚠️ It refuses to answer at all if it could walk no module or could not read the table — "nothing is dead" and "nothing was measured" must not look alike | why a branch is unexercised. `0x05` (`else`) is dead **by design** — the claim that no value-position `if` is emitted depends on it — while the rest are merely not emitted *yet*, and the gate cannot tell those apart. Neither is deleted: removing one would stop the walker the day that shape is emitted |
 | **the tower** | `ERIS_EXP03=/path/to/exp/03-wasm-userland bash tower.sh` | that the floor cost of a program does not move when the sister interpreter is stacked h=1/2/3 deep around our ROM — checked by three floors *agreeing*, not by "nothing crashed" | that the **answers** agree. Our ROM imports nothing, so it has no `env.print` and every height emits an empty stdout. What matches is the instruction count, not the value. That is the price of self-sufficiency, and it is written down rather than glossed |
 
 ▲ No number is restated on this page. `claims.tsv` names, for every quantity in these
@@ -27,7 +28,7 @@ the ledger rather than by a second copy here that could drift.
 
 ## Inside the suite
 
-Seven gates. ⚠️ **A skipped gate is never read as a pass** — the run reports
+Eight gates. ⚠️ **A skipped gate is never read as a pass** — the run reports
 `passed / failed / skipped` separately.
 
 | gate | what it checks | how it can fail |
@@ -39,6 +40,7 @@ Seven gates. ⚠️ **A skipped gate is never read as a pass** — the run repor
 | ⑤ projection | a **real browser** loads the page and reports the value it computed | the page renders but does not compute |
 | ⑥ isolation | no language implementation was touched since the baseline | the contract alone was not enough |
 | ⑦ claims | every number in the documents is re-derived from its gate | a document goes stale |
+| ⑧ walker coverage | how many branches of the opcode walker the emitter has never exercised — and refuses to let that number grow | a table entry added for a shape nothing emits, which would pass silently |
 
 ## Inside the ledger
 

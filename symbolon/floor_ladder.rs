@@ -1593,7 +1593,7 @@ fn has_import(m: &[u8]) -> bool {
 ///    （`[NO-IFOP ok]`。`NOIMPORT` と同じ向き）。
 /// ⚠️ 知らない opcode に当たったら「無い」ではなく **測れない** で落ちる ——
 ///    黙って 0 を返すと、壊れた走査と「本当に無い」が同じ答えになる（門⑥ で一度払った型）。
-fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
+fn ifop_count(m: &[u8]) -> Result<(usize, usize, Vec<u8>), String> {
     fn u(m: &[u8], i: &mut usize) -> Result<usize, String> {
         let (mut n, mut sh) = (0usize, 0u32);
         loop {
@@ -1615,6 +1615,10 @@ fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
                              0x55, 0x6A, 0x6B, 0x7C, 0x7D, 0x7E, 0x7F, 0x83, 0x84, 0x86, 0x88,
                              0xA7, 0xAD];
     let (mut ifs, mut ops) = (0usize, 0usize);
+    // ⚠️ **踏んだ枝を控える**（四十九段の次、⑩ で足した）—— 歩き手は知らない opcode で落ちるが、
+    //    知っている枝を *一度も踏まないまま* 通ることは黙って起きる。三十六段「引かれなかった
+    //    形は数に出ない」と同じ族。⇒ 踏んだ物を名乗り、数える側（walker.sh）が差を出す。
+    let mut seen = [false; 256];
     let mut i = 8;                                        // magic(4) + version(4)
     while i < m.len() {
         let sid = m[i]; i += 1;
@@ -1633,6 +1637,7 @@ fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
                 while j < bend {
                     let op = m[j]; j += 1; ops += 1;
                     if op == 0x04 { ifs += 1; }
+                    seen[op as usize] = true;      // ⚠️ 落ちる枝（知らない opcode）は下で return するので入らない
                     if NOIMM.contains(&op) {
                     } else if op == 0x02 || op == 0x03 || op == 0x04 { j += 1;          // blocktype
                     // ⚠️ 0x10(call) は四十五段で足した —— 段H の測る ROM が step を呼ぶため。
@@ -1647,18 +1652,22 @@ fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
         }
         i = end;
     }
-    Ok((ifs, ops))
+    Ok((ifs, ops, (0u16..256).filter(|&o| seen[o as usize]).map(|o| o as u8).collect()))
 }
 
 /// module を組む口は必ずここを通る ⇒ 印を出し忘れられない（宣言を使用から導く。二十六段の型）。
 fn no_ifop(m: &[u8]) {
     match ifop_count(m) {
         Err(e) => { println!("  ⛔ 値位置の if を測れない —— {}", e); std::process::exit(1); }
-        Ok((n, _)) if n > 0 => {
+        Ok((n, _, _)) if n > 0 => {
             println!("  ⛔ module に if(0x04) が {} 個 —— init.zig が持たない形を吐いている", n);
             std::process::exit(1);
         }
-        Ok((_, ops)) => println!("  自給の続き: 値位置の if も block で書いた —— op {} を歩いて 0x04 なし [NO-IFOP ok]", ops),
+        Ok((_, ops, seen)) => {
+            let 枝: Vec<String> = seen.iter().map(|o| format!("0x{:02X}", o)).collect();
+            println!("  自給の続き: 値位置の if も block で書いた —— op {} を歩いて 0x04 なし [NO-IFOP ok] 歩いた枝: {}",
+                     ops, 枝.join(","));
+        }
     }
 }
 

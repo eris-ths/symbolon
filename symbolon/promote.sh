@@ -148,6 +148,19 @@ if ! command -v python3 >/dev/null; then sk "python3 が無い"; else
   fi
 fi
 
+# ---- 門⑧ 歩き手が自分の表をどれだけ踏んだか ----
+echo "門⑧ 歩き手の被覆"
+if [ ! -x "$fl" ]; then sk "floor_ladder が無い"; else
+  o="$(bash walker.sh 2>&1)"
+  if printf '%s' "$o" | grep -q '\[WALKER ok\]'; then
+    ok "$(printf '%s' "$o" | grep -o '踏んだ [0-9]* / \*\*一度も踏んでいない [0-9]\*\*' | head -1 || echo '歩き手の表の未踏を数えた')"
+    printf '%s\n' "$o" | grep -E '^  (歩いた|踏んだ)' | sed 's/^/     /'
+  else
+    ng "歩き手の被覆が測れない or 未踏が増えた"
+    printf '%s\n' "$o" | grep -E '^  ⛔' | sed 's/^/     /'
+  fi
+fi
+
 # ---- 判定 ----
 echo
 echo "通過 $pass / 落ち $fail / 保留 $skip"
@@ -157,7 +170,7 @@ elif [ "$skip" -gt 0 ]; then
   echo "⏸ **保留** —— 落ちてはいないが、$skip 門を *撃てていない*。"
   echo "   ⚠️ 撃てていない門を「通った」と読まない。環境を揃えて撃ち直す。"
 else
-  echo "✅ **昇格可** —— 七門すべてを撃って通った。"
+  echo "✅ **昇格可** —— 八門すべてを撃って通った。"
   echo "   ◆ 昇格先は symbolon/ —— 中身を移してよい。"
 fi
 _finished=1

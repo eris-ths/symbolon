@@ -106,10 +106,11 @@ contract.lock  version + fingerprints. Change the contract → raise the version
 floor_ladder.rs   four interpreter floors, the specializer, and the back-ends
 floor_ladder.mjs  the same fold, in a second runtime, as a cross-check
 
-promote.sh     seven gates. Skips are never read as passes
+promote.sh     eight gates. Skips are never read as passes
 claims.py      every numeric claim, re-derived from the tool that produced it
 icount.sh      deterministic instruction counts from a sister runtime
 tower.sh       the same runtime stacked h deep; P's floor cost must not move with h
+walker.sh      which branches of the opcode walker its own output has never exercised
 ```
 
 ## Running it

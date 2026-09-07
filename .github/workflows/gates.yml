@@ -12,7 +12,7 @@ on:
 
 jobs:
   gates:
-    name: seven gates (skips are not passes)
+    name: eight gates (skips are not passes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +58,7 @@ jobs:
           # ⚠️ No count here on purpose. The number of skipped rows moves whenever the ledger
           #    grows; the run prints its own, and a number kept in two places drifts in one.
           [ "${skip:-9}" -le 3 ] || { echo "::error::more gates skipped than the three that cannot run here — something degraded silently"; bad=1; }
-          [ "${pass:-0}" -ge 4 ] || { echo "::error::fewer gates ran than expected"; bad=1; }
+          [ "${pass:-0}" -ge 5 ] || { echo "::error::fewer gates ran than expected"; bad=1; }
           exit "$bad"
 
       - name: report the counts, including what did not run

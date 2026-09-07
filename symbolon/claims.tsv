@@ -95,3 +95,8 @@ README/str/バイト	symbolon/README.md	| wasm for the string-heavy program (lit
 段H/probe/命令	COMMON.md	| 決定的な命令数 | ⟦952⟧ |	icount	engine_probe\s+(\d+)
 段H/probe/真値	COMMON.md	| 姉妹実験が返した最終 total | ⟦6⟧ ← Python 床の真値と一致（threaded / byte 歩行の両路で） |	engine	期待 total (\d+) \[ENGINE-ROM ok\]
 段H/probe/印	COMMON.md	⟦ENGINE-ROM⟧ ok	engine	\[(ENGINE-ROM) ok\]
+歩き手/表	COMMON.md	歩き手の表 **⟦24⟧ 本**	walker	歩き手の表 (\d+) 本
+歩き手/module	COMMON.md	歩いた module **⟦14⟧ 本**	walker	歩いた module (\d+) 本
+歩き手/踏んだ	COMMON.md	踏んだ **⟦15⟧**	walker	踏んだ (\d+) /
+歩き手/未踏	COMMON.md	一度も踏んでいない **⟦9⟧**	walker	一度も踏んでいない (\d+)\*\*
+歩き手/印	COMMON.md	⟦WALKER⟧ ok	walker	\[(WALKER) ok\]
