@@ -2,15 +2,33 @@
 
 Nothing here asks you to believe a number. Each one has a command that regenerates it.
 
-## Everything at once
+◆ **Read the fourth column first.** Every instrument below is listed with what it *cannot*
+say. A tool's blind spot is the part that goes stale silently, so it is written down next to
+the tool rather than in a paragraph further down the page — and a new instrument arrives here
+as a row, with that column filled in, or it does not arrive.
 
-```bash
-bash promote.sh
-```
+## The instruments
+
+| instrument | fire it with | what it can say | ▲ what it cannot say |
+|---|---|---|---|
+| **the suite** | `bash promote.sh` | whether all seven gates pass on this tree, reported as `passed / failed / skipped` | whether a *skipped* gate would have passed. The run refuses to say "promotable" while any gate merely did not run — ⚠️ **a skip is never read as a pass** |
+| **the ledger** | `python3 claims.py` | that every number in these documents still matches the tool that produced it, and that no new bare claim has been added | that a number is *right*. It compares the document against the tool; if both are wrong the same way, they agree |
+| **the ladder** | `rustc -O floor_ladder.rs -o /tmp/fl` then `/tmp/fl`, `--probe probe_cons.json`, `--web`, `--engine` | instruction counts before and after folding, arena cell counts, and the byte size of every emitted artifact | wall-clock. Counts are deterministic; times move ±40% between runs on the same code, so ratios are reported only within one run |
+| **a real engine, a real browser** | `node probe_run.mjs probe_clos.wasm 45750`, `node web_verify.mjs`, `node engine_verify.mjs` | that the emitted module computes the expected value outside our own runner, and that a browser loads the page and clicks it | anything, when Node or a browser is missing. Two gates then skip — and the suite says so rather than passing |
+| **the deterministic counter** | `ERIS_EXP03=/path/to/exp/03-wasm-userland bash icount.sh` | byte-identical instruction counts for every emitted ROM, from a sister runtime we did not write | anything without that runtime. 🔴 The first time we could fire it, three of the ledger's own patterns turned out to be wrong — they had been written for a gate that had never once run (`MISSES.md`) |
+| **the engine, on that same instrument** | `{ printf 'v'; cat engine_probe.wasm; } \| futh`, and `engine_probe` in the ROM list of `icount.sh` | the value and the instruction count of the engine's own function body, replayed against the truth trace the reference floor produced. No expected value is written twice — the driver reads the trace | that *the seam* was measured. The seam exports `step` and `memory`; the sister runtime enters at `run`. ⚠️ Widening the seam to fit the instrument would trade a published promise for convenience, so the ladder emits a second module from the same body, exporting `run` and `kernel` only — a thing you measure and a thing you hand over should not answer to the same name |
+| **the tower** | `ERIS_EXP03=/path/to/exp/03-wasm-userland bash tower.sh` | that the floor cost of a program does not move when the sister interpreter is stacked h=1/2/3 deep around our ROM — checked by three floors *agreeing*, not by "nothing crashed" | that the **answers** agree. Our ROM imports nothing, so it has no `env.print` and every height emits an empty stdout. What matches is the instruction count, not the value. That is the price of self-sufficiency, and it is written down rather than glossed |
+
+▲ No number is restated on this page. `claims.tsv` names, for every quantity in these
+documents, the gate that re-derives it — so which command produces which number is answered by
+the ledger rather than by a second copy here that could drift.
+
+---
+
+## Inside the suite
 
 Seven gates. ⚠️ **A skipped gate is never read as a pass** — the run reports
-`passed / failed / skipped` separately and refuses to say "promotable" while any gate was
-merely not run.
+`passed / failed / skipped` separately.
 
 | gate | what it checks | how it can fail |
 |---|---|---|
@@ -22,87 +40,16 @@ merely not run.
 | ⑥ isolation | no language implementation was touched since the baseline | the contract alone was not enough |
 | ⑦ claims | every number in the documents is re-derived from its gate | a document goes stale |
 
-## Just the claims
+## Inside the ledger
 
-```bash
-python3 claims.py
-```
+| pass | what it does | ◆ what it catches |
+|---|---|---|
+| ① presence | the sentence the ledger quotes must actually appear in the document | "I wrote it" when nothing was written |
+| ② re-derivation | fire the gate, extract the number, compare against the document | a document that has gone stale against its own tool |
+| ③ coverage | a quantity in neither the ledger nor the exemption list fails the run — **and an exemption that no longer matches anything fails too** | ⚠️ a ratchet in both directions: bare claims cannot accumulate, and stale exemptions cannot be left behind to quietly widen the net later |
+| ④ anchors | every limit stated in prose must contain a ledger sentence, or declare itself unanchored with a reason | a limit that rots silently, because gates only watched the numbers |
+| ⑤ anchor quality | the count of gates anchored on a **fixed token** may rise and never fall | replacing a machine-checkable token with a human sentence, which comes loose the day that sentence is edited |
 
-Three passes:
-
-1. **presence** — the sentence the ledger quotes must actually appear in the document.
-   ◆ This is what catches "I wrote it" when nothing was written.
-2. **re-derivation** — fire the gate, extract the number, compare against the document.
-3. **coverage** — any quantity in the documents that is in neither the ledger nor the
-   exemption list fails the run. ⚠️ A ratchet: new bare claims cannot accumulate.
-
-The ledger is `claims.tsv`; exemptions are `claims.skip`, and each one carries a reason drawn
-from a fixed vocabulary (restatement / derived / historical / structural constant / figure of
-speech). **"It was tedious" is not a reason.**
-
-## Reproducing a single number
-
-```bash
-rustc -O floor_ladder.rs -o /tmp/fl
-
-/tmp/fl                                # 6,103,390 → 15,011, and the arena cell counts
-/tmp/fl --probe probe_clos.json        # 2,350,010 → 5,711
-/tmp/fl --probe probe_cons.json        # 3,967,486 → 9,320
-/tmp/fl --web                          # wasm and HTML byte sizes
-/tmp/fl --engine                       # the engine module
-
-node probe_run.mjs probe_clos.wasm 45750    # runs it, warms up first, checks linearity
-node web_verify.mjs                          # drives a real browser
-node engine_verify.mjs                       # clicks a real page
-```
-
-▲ **Instruction counts are deterministic; wall-clock is not.** Times move ±40% between runs on
-the same code. We report ratios only within a single run, and never compare milliseconds
-across runs. The reasoning is in `notes/COMMON.md` §1.
-
-## The deterministic counter
-
-```bash
-ERIS_EXP03=/path/to/exp/03-wasm-userland bash icount.sh
-```
-
-Runs the emitted modules under a sister runtime that prints byte-identical instruction counts
-for a fixed seed. ⚠️ Without it, two gates skip — and the suite says so rather than passing.
-
-🔴 The first time we could finally run it, three of the ledger's own patterns turned out to be
-wrong. They had been written for a gate that had never once been fired. See `MISSES.md`.
-
-## The engine, on the same instrument
-
-```bash
-{ printf 'v'; cat engine_probe.wasm; } | futh      # value
-ERIS_EXP03=/path/to/exp/03-wasm-userland bash icount.sh   # instruction count, in the ROM list
-```
-
-The engine seam exports `step` and `memory`; the sister runtime enters at `run`. For a long
-time this repository recorded that as a reason the engine could not be measured there.
-▲ That was one way in, not the only one. Adding `run` to the seam would widen a published
-promise in order to make measurement convenient — the wrong direction. So the seam is
-untouched, and the ladder emits a second module from **the same function body**, with a driver
-that replays the truth trace the Python floor produced. Nothing is copied, and no expected
-value is written down twice: the driver reads the trace.
-
-⚠️ That module is not the seam. It exports `run` and `kernel` only, and deliberately does not
-carry the names `step` and `memory` — a thing you measure and a thing you hand over should not
-answer to the same name.
-
-## The tower
-
-```bash
-ERIS_EXP03=/path/to/exp/03-wasm-userland bash tower.sh
-```
-
-Stacks the sister interpreter h=1/2/3 deep around our ROM and reads the `[cost]` each layer
-prints for itself. The innermost number is the floor cost of P; it must not move with h.
-⚠️ We check that by **presence** — three floors that agree — not by "nothing crashed".
-
-▲ **What this does not show: that the answers agree.** Our ROM imports nothing, so it has no
-`env.print` and every height emits an empty stdout. The sister suite anchors output identity
-byte-for-byte; we cannot, because that anchor needs an import we deliberately do not have.
-What matches here is the instruction count, not the value. That is the price of self-sufficiency,
-and it is written down rather than glossed.
+Exemptions live in `claims.skip`, and each one carries a reason drawn from a fixed vocabulary
+(restatement / derived / historical / structural constant / figure of speech).
+**"It was tedious" is not a reason.**

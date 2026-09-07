@@ -2,6 +2,10 @@
 # 理由は五語だけ: 再掲 / 導出 / 経緯 / 構造の定数 / 言い回し
 # ⚠️ 「門番を書くのが面倒」は理由ではない。ここに増えたら、増えた分だけ主張が裸になっている。
 # 鍵は 文書:正規化した量。行が動いても効くが、同じ量が別の場所に出ても効いてしまう(緩い側)。
+# 🔴 **一度も当たらなかった行は門が落とす**(四十九段で入れた)。免除表は両側のラチェット ——
+#    「裸の主張を増やせない」と「古い免除を置き去りにできない」。置き去りの何が危ないかというと、
+#    同じ数を裸で書き戻した日に、もう当たらないはずの理由書きで **静かに通る**から。
+#    ⚠️ 入れた日に 37 行が死んでいた(95 → 58、39%)。門が無い間ずっと溜まっていた。
 COMMON.md:300セル	再掲	§1-1 の cons 段E arena(台帳: 段E/cons/arena)
 COMMON.md:50セル	再掲	§1-5 表の値(台帳: 寿命/own・own2 と同じ行の量)
 COMMON.md:407分の1	再掲	台帳: 整数/減り
@@ -15,14 +19,11 @@ COMMON.md:41命令	導出	icount の collapse 差。素の量は門 icount が�
 COMMON.md:1命令	言い回し	「1 命令も違わない」—— 量の主張ではない
 COMMON.md:16B	構造の定数	pair = i64 ×2。測った値ではなく設計の決め
 COMMON.md:214B	経緯	八段時点の値。今の値は §1-1 の表が正 ⇒ 作り直せない
-COMMON.md:98B	経緯	第七〜八段の値。今の値は §1-1 の表が正 ⇒ 作り直せない
 COMMON.md:107B	再掲	台帳: 段G/閉包/バイト
 COMMON.md:274B	再掲	台帳: 寿命/own2/バイト
 COMMON.md:39473→	再掲	§1-1 の cons 床D arena
 COMMON.md:187→	経緯	八段時点の値
 COMMON.md:1000→	再掲	§1-5 の峰
-COMMON.md:114→	経緯	第六段の値
-COMMON.md:→107	再掲	台帳: 段G/閉包/バイト
 symbolon/MISSES.md:100×	経緯	外した予測そのもの（50〜100x）。作り直せない
 symbolon/MISSES.md:200×	経緯	外した予測そのもの（50〜200x）
 symbolon/MISSES.md:10×	経緯	外した予測そのもの（2〜10x）
@@ -31,67 +32,38 @@ symbolon/MISSES.md:1000→	再掲	§1-5 の峰 1,000 → 50
 symbolon/MISSES.md:300cells	再掲	台帳: 段E/cons/arena
 symbolon/README.md:407×	再掲	同じ頁の表（台帳: README/整数/比）
 symbolon/README.md:14instructions	構造の定数	契約の命令数。測った値ではなく設計の決め
-symbolon/VERIFY.md:6103390→	再掲	台帳: README/整数/前
-symbolon/VERIFY.md:→15011	再掲	台帳: README/整数/後
-symbolon/VERIFY.md:2350010→	再掲	台帳: README/閉包/前
-symbolon/VERIFY.md:→5711	再掲	台帳: README/閉包/後
-symbolon/VERIFY.md:3967486→	再掲	台帳: README/cons/前
-symbolon/VERIFY.md:→9320	再掲	台帳: README/cons/後
 symbolon/README.md:→15011	再掲	同じ行（台帳: README/整数/後）
 symbolon/README.md:→5711	再掲	同じ行
 symbolon/README.md:→9320	再掲	同じ行
 symbolon/README.md:6103390→	再掲	同じ行
 symbolon/README.md:2350010→	再掲	同じ行
 symbolon/README.md:3967486→	再掲	同じ行
-symbolon/README.md:407of408	再掲	台帳: README/整数/比 と同じ量の言い換え
 symbolon/README.md:408instructions	導出	407 分の 1 の言い換え（407 のうち 407 が消え、408 分の 1 が残る）。台帳: README/整数/比
-COMMON.md:11.3×	経緯	門番に捕まった側の値。今の走行は 10.7 で、時間の比なので門番を付けられない
-COMMON.md:407×	再掲	台帳: 整数/減り（英語面の言い換えを引用している）
-COMMON.md:6103390→	再掲	台帳: 床D/整数/命令
 symbolon/MISSES.md:8.6×	経緯	この repo より前の実測。ここに門は無い（外した予測 ①の実測値）
 symbolon/MISSES.md:1.1×	経緯	同上（外した予測 ②の実測値）
 COMMON.md:15040B	導出	940 セル × 16 B。台帳: str/峰 と cons セルの大きさから
 COMMON.md:47B	導出	probe の文字列の長さ（47 文字 ×1 B）
-COMMON.md:2650B	経緯	詰める前の値。実装を戻さないと作り直せない
-COMMON.md:→256	再掲	台帳: 段G‴/str/バイト
 COMMON.md:16分の1	経緯	撃つ前の予想そのもの（実測は 0 セル）。予想は作り直せない
 COMMON.md:940セル	経緯	詰める前の峰。実装を戻さないと作り直せない
 COMMON.md:0セル	再掲	台帳: str/峰（予想の表で言い換えている）
-COMMON.md:1バイト	構造の定数	1 文字 1 バイトで置く、という設計の決め
 COMMON.md:418分の1	再掲	台帳: str/減り（予想の表で言い換えている）
 COMMON.md:14命令	構造の定数	契約の命令数。測った値ではなく設計の決め
-COMMON.md:1B	構造の定数	詰めた文字列は 1 B/要素 —— 表現の定義そのもの（測って出る数ではない）。実測側は峰の行が持つ
-COMMON.md:1セル	構造の定数	cons は 1 セル/文字 —— 同上。セルの大きさ 16 B は別の行が門で持つ
 symbolon/MISSES.md:1.37×	導出	二つの ms(0.0055 / 0.0040)の比。⚠️ 時間は機に依るので門で固定しない —— 固定できるのは byte 数の方（台帳: 段F/割付/バイト）
 COMMON.md:1.37×	導出	二つの ms の比（同上。時間は機に依るので固定しない）
-COMMON.md:192B	再掲	二十八段の表（台帳: 段F/閉包/バイト）
-COMMON.md:1byte	言い回し	二十八段「1 byte も変わらなかった」—— 量ではなく言い回し
-COMMON.md:187B	経緯	二十八段の表の「前」列（割付を入れる前の値）
-COMMON.md:217B	経緯	同上（閉包 probe の割付前）
-COMMON.md:166B	経緯	二十八段の表の「後」列（頂の一段の割付まで。今の値は §1-1 の表が正）
-COMMON.md:192B	経緯	同上（閉包 probe。頂の一段まで）
-COMMON.md:143B	経緯	三十二段の表（register 割付まで）。今の閉包の値は §1-1 の表が正
 symbolon/MISSES.md:166bytes	経緯	§9 が測った値（頂の一段の割付）。今の値は同じ節の続きが持つ
 symbolon/MISSES.md:187bytes	経緯	§9 の出発点（割付を入れる前）。今の値は同じ節の続きが持つ
 symbolon/MISSES.md:2.75×	導出	二つの ms(0.0055 / 0.0020)の比。時間は機に依るので門で固定しない
-COMMON.md:2.75×	導出	二つの ms(0.0055 / 0.0020)の比。時間は機に依るので門で固定しない
-COMMON.md:7byte	構造の定数	x86 の `mov rax,[rdi+disp32]` の符号長（命令の定義。測って出る数ではない）
-COMMON.md:3byte	構造の定数	同 `mov rax,<reg>` の符号長
 COMMON.md:122B	経緯	三十二段の表の整数ループ（割付まで）。⚠️ 今は閉包の値でもある —— 現在値の方は台帳 段F/閉包/バイト が持つ
 symbolon/MISSES.md:122bytes	経緯	§9 の続きが測った値（register 割付まで）。今の値は §13 が持つ
 symbolon/MISSES.md:6.1×	導出	二つの ms(0.0055 / 0.0009)の比。時間は機に依るので門で固定しない
-COMMON.md:6.1×	導出	二つの ms(0.0055 / 0.0009)の比。時間は機に依るので門で固定しない
-COMMON.md:24命令	経緯	三十三段で数えた時点の段F の命令数（当て先を選ぶために数えた値）
-COMMON.md:5byte	経緯	間違って書いた長さ（実際は 6）。**誤りの記録** ⇒ 門で固定しない
-COMMON.md:2byte	導出	`local.set;local.get` を `local.tee` に畳んだ時の差（命令一つ分）。探した結果 *在らなかった* 当て先の見積り
-COMMON.md:351→	経緯	三十五段で「動いた前の値」として書いた数（発生器を広げる前の門の値）
-COMMON.md:339→	経緯	三十七段で「動いた前の値」として書いた数（枝の割れを直す前の門の値。今の正は台帳: 形/ファズ/一致）
-COMMON.md:14個	構造の定数	契約の op の数。三十八段で「op の番号を 14 個の定数と突き合わせる」と書いた所（contract.lock が正）
 symbolon/MISSES.md:6103390instructions	再掲	台帳: 床D/整数/命令（COMMON と README に門が在る。MISSES §16 は同じ数の再掲）
 symbolon/MISSES.md:407×	再掲	台帳: README/整数/比（§16 で「命令の比は動いていない」と言うために引いた）
 symbolon/MISSES.md:1.43×	導出	壁時計の比(25.6 → 17.9 ms)。時間は走行ごとに動くので門にしない —— README が同じ立場を明示している
 symbolon/MISSES.md:632×	導出	同上（段E の床D 比、四本×2 標本の上端。⚠️ 振れる ⇒ 幅ごと載せている）
 symbolon/MISSES.md:740×	経緯	床D を速くする前の値。作り直せない（今の正は 339〜632×）
 COMMON.md:1000セル	再掲	四十一段の表。門は MISSES §17 側（台帳: 寿命/LIFO/通/既定）
-COMMON.md:1020セル	再掲	同上（台帳: 寿命/LIFO/否/既定・否/峰）
-COMMON.md:26B	導出	if 二つ分の増分（今の目方は §1-1 の表が正）
+COMMON.md:1048→	経緯	四十七段で畳む前の §5 の行数。作り直せない（畳んだ後の木からは出ない）⇒ 門を持てない
+COMMON.md:6バイト	言い回し	誤読の引用（門が `0x6B` を「6 バイト」と読んだ、と書いた地の文）—— 量の主張ではない
+COMMON.md:1234→	言い回し	合成した走査入力の literal（門に食わせた一行そのもの）—— 木についての量ではない
+COMMON.md:→9999	言い回し	同上（矢印に食われる側の実測に使った数）
+COMMON.md:26B	言い回し	免除の鍵を引用した地の文（`226 B` への部分一致を誤って数えた話）—— 量の主張ではない

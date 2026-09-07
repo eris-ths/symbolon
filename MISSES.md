@@ -10,6 +10,37 @@ timestamp. That is the only thing that makes a prediction a prediction.
 
 ---
 
+## The seventeen at a glance
+
+◆ Each row links a prediction to what the measurement said, and to the type it left behind.
+The types are the part that transfers; the numbers are only how we found them.
+▲ Every number in this table is restated from the entry below it — the entry is the source.
+
+| # | what we predicted | what it measured | ◆ the type it left behind |
+|---|---|---|---|
+| 1 | a systems language buys 50–100× | 8.6× | the cost was the *height of the tower*, not the host language |
+| 2 | refcounting is what is left to remove | 1.1× | ownership buys **boundedness, not speed** |
+| 3 | cons-heavy programs fall to 50–200× | 426×, higher than the integer loop | "it stopped" is not "it could not go further" |
+| 4 | collapsing the remaining tower buys another 2–10× | ≈1.0 | our output has no tower left to collapse — which says nothing about the *other* axis |
+| 5 | prepending to a packed string degrades to cells | silently wrong | **graceful degradation is a mechanism you build**, not a property a system has |
+| 6 | the stages agree, so the compiler is right | one stage was wrong about a shape the others never disagreed on | agreement between implementations that share an assumption does not test that assumption |
+| 7 | four gates on that stage is decent coverage | a program that reads a pair without ever building one produced a broken module | **derive a declaration from its use.** Written *next to* the use, the two drift |
+| 8 | refusing was timid; supporting it is the real fix | the support silently truncated — the refusal it replaced had been correct | replacing a refusal removes a gate; check what the refusal was holding |
+| 9 | register allocation is worth several times | 1.37× | the mechanism was read right and the **cost centre** was read wrong |
+| 10 | the gates cover the claims | they covered the *numbers*; the entrance page said the wrong thing for two days | **a ratchet only holds the shape it was cut for** |
+| 11 | the gates cover the repository | the commit message is outside the repository, and no gate reads it | the same shape, one level out — the boundary of a gate is not the boundary of the work |
+| 12 | the closure probe covers closures | it covered closures whose captures were never shadowed | a probe covers the case it draws, not the name it carries |
+| 13 | tighten the branch — the hottest thing in a loop | the loop had one branch and no comparisons at all | **a target chosen from intuition is a target chosen from someone else's program** |
+| 14 | the fuzzer draws six shapes, so six shapes are covered | one of the six had never been drawn — 0 out of 200,000 | **emitting a shape is not shooting it**, and absence is unreadable |
+| 15 | packing small integers is invisible to everything else | it was visible in the type system, and refused ordinary programs | **a representation is not a type** |
+| 16 | floor D is a switch-dispatch VM at its practical limit | 38.7% of its dispatches were a single four-instruction sequence | one number had been standing for two quantities |
+| 17 | the cell-level reclaim is covered — there is a probe, and it passes | every probe hit the same side of the branch | **an optimisation with a condition in it is not covered until both answers are drawn** |
+
+⚠️ This table grows by one row per entry, and the fourth column is the reason to add one: a
+miss that leaves no transferable type has probably not been understood yet.
+
+---
+
 ## 1. "Rewriting the interpreter in a systems language will buy 50–100×"
 
 **Measured: 8.6×.**

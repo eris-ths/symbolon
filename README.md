@@ -24,8 +24,9 @@ name is the method: everything here is checked by putting two halves together.
 
 **Apache-2.0.** Copyright 2026 eris-ths.
 
-⚠️ Every commit here is authored by `umbra` because **this tree is generated, not written**.
-That is explained at the bottom, and it is the reason the history is short.
+⚠️ Almost every commit here is authored by `umbra`, because **this tree is generated, not
+written**. Three are not, and that is recorded at the bottom along with the reason the history
+is short.
 
 > ## Don't trust this README. Run it.
 >
@@ -92,8 +93,8 @@ refuse to compare across them — see the eight articles in `notes/COMMON.md` §
 
 ```
 README.md      this page          notes/COMMON.md   the chronicle (Japanese)
-VERIFY.md      how to check it    notes/DESIGN.md   requirements, read backwards
-MISSES.md      what we got wrong  SECURITY.md       how to report a leak
+VERIFY.md      how to check it    SECURITY.md       how to report a leak
+MISSES.md      what we got wrong  git log           one entry per step, in English
 
 symbolon/      everything runnable — from here down, run commands inside it:
 
@@ -150,8 +151,16 @@ days after strings landed, and no gate rang, because gates only watched the numb
 
 ## ⚠️ This repository is a shadow
 
-It is **generated** from a private working repository, every time, in full. That is why every
-commit here is authored by `umbra`.
+It is **generated** from a private working repository, every time, in full. That is why the
+commits here are authored by `umbra`.
+
+🔴 **Three of them are not, and we are leaving them that way.** They carry a different author —
+visible in `git log` — because the clone's identity had been set to satisfy a tooling check on
+the source side, and nothing was watching that line: the guard protecting this tree reads
+files, and an author is not a file. The history here is append-only, one projection at a time,
+so rewriting them is not on the table; a published mistake left visible is worth more than a
+tidy history. A gate now refuses to add a commit under any other name, and prints how many
+already exist, so the count can only stay where it is.
 
 **How to contribute, given that.**
 
@@ -165,8 +174,14 @@ commit here is authored by `umbra`.
 
 `notes/COMMON.md` is the working notebook — the chronicle, in Japanese, published as-is rather than
 translated. A translation is one more thing that can silently drift, and we would not be able to
-gate it. `notes/DESIGN.md` is its normative counterpart: requirements read backwards out of what was
-actually measured.
+gate it. Its normative counterpart, the requirements read backwards out of what was actually
+measured, is kept on the source side and is not published.
+
+**If you want it in English, read `git log`.** Every commit here is a projection, and its message is
+a written account of that step — what changed, what was measured, what turned out to be wrong. It is
+written, not generated: a summary produced by machine would be one more thing that can drift, for
+the same reason the notes are not translated. The log is the English record; the notes are the
+Japanese one; neither is derived from the other.
 
 ▲ The published tree is arranged as: this page, `VERIFY.md` and `MISSES.md` at the root; the
 Japanese notes under `notes/`; and everything runnable — contract, floors, specializer, gates —
