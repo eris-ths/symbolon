@@ -42,9 +42,13 @@ printf '%-26s %10s\n' 'ROM' 'instrs'
 #      「未対応 opcode」の叫びも無し ⇒ **block 二枚の値位置 `if` は本当に受けられる**。
 #      ⚠️ 受け側は未知 opcode を黙って飛ばさない（threaded は error.UnsupportedOp、
 #      byte 歩行は「未対応 opcode 0x.. @body」で停止）⇒ 「通った」は「見逃された」ではない。
-# ※ engine.wasm はこの列に入れられない —— export が `step`/`memory` で、あちらの ABI(`run`)と違う。
-#   接点の可否は seam の側の問いであって、この計器の問いではない。
-for w in compiled probe_clos probe_str probe_join; do
+# ✅ 2026-09-07(四十五段): 段H も列に載った。ここには長く「engine.wasm は入れられない —— export が
+#   `step`/`memory` で、あちらの ABI(`run`)と違う」と書いてあった。**入れ方が一つではなかった** ——
+#   seam に `run` を足すのは *測りたいから公開の約束を広げる* ことで順序が逆 ⇒ seam は一 byte も
+#   動かさず、**同じ body から**駆動つきの `engine_probe.wasm` を吐いた（軌跡は Python 床の真値）。
+#   ⚠️ engine_probe は seam ではない。export は `run`/`kernel` だけで `step`/`memory` を名乗らない。
+#   ⇒ 値の一致は `{ printf 'v'; cat engine_probe.wasm; } | futh` が出す（最終 total = 6）。
+for w in compiled probe_clos probe_str probe_join engine_probe; do
   [ -f "$here/$w.wasm" ] && printf '%-26s %10s\n' "$w" "$(icount "$here/$w.wasm")"
 done
 echo

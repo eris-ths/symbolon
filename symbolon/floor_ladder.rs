@@ -1635,7 +1635,9 @@ fn ifop_count(m: &[u8]) -> Result<(usize, usize), String> {
                     if op == 0x04 { ifs += 1; }
                     if NOIMM.contains(&op) {
                     } else if op == 0x02 || op == 0x03 || op == 0x04 { j += 1;          // blocktype
-                    } else if matches!(op, 0x0C | 0x0D | 0x20 | 0x21 | 0x22) { u(m, &mut j)?;
+                    // ⚠️ 0x10(call) は四十五段で足した —— 段H の測る ROM が step を呼ぶため。
+                    //    足すまでは「測れない」で **落ちた**（不在で静かに通らない側に倒してある）。
+                    } else if matches!(op, 0x0C | 0x0D | 0x10 | 0x20 | 0x21 | 0x22) { u(m, &mut j)?;
                     } else if op == 0x41 || op == 0x42 { sk(m, &mut j)?;
                     } else if (0x28..=0x3E).contains(&op) { u(m, &mut j)?; u(m, &mut j)?;
                     } else { return Err(format!("測れない —— 知らない opcode 0x{:02X}", op)); }
@@ -1714,6 +1716,56 @@ fn wasm_engine_module(body: &[u8], nlocals: u32) -> Vec<u8> {
     uleb(1, &mut fb); uleb(nlocals, &mut fb); fb.push(0x7E);
     fb.extend_from_slice(body); fb.push(0x0B);
     let mut c = Vec::new(); uleb(1, &mut c); uleb(fb.len() as u32, &mut c); c.extend_from_slice(&fb);
+    section(10, c, &mut m);
+    no_ifop(&m);
+    m
+}
+
+// 段H を **合流の列に載せる**ための ROM（2026-09-07、四十五段）。
+//
+// なぜ要るか: `engine.wasm` だけが決定的計器に載っていなかった —— あちらの入口は `run` で、
+//   seam の export は `step`/`memory`。⚠️ ここで `engine.wasm` に `run` を足すのは順序が逆で、
+//   **測りたいから公開の約束(contract の exports)を広げる**ことになる ⇒ seam は一 byte も動かさない。
+//
+// ◆ 代わりに、**同じ body から**駆動つきの ROM を吐く。step の中身は `wasm_engine_module` と
+//   同じ `body` を渡されるので **写しではない**（二箇所に持つと片方が腐る、をここでは踏まない）。
+//   駆動は真値の軌跡（`engine_trace.json` の `evs`。Python 床が出した物）をそのまま焼く
+//   ⇒ 返り値は最後の `step` の返り = 最終 total で、あちらの `futh 'v'` が値まで突き合わせられる。
+// ※ 使う構造は block/loop すら要らない直線 + `call` だけ ⇒ `if`(0x04) は出ない（no_ifop が見る）。
+fn wasm_engine_probe_module(body: &[u8], nlocals: u32, evs: &[i64]) -> Vec<u8> {
+    let mut m: Vec<u8> = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+    // type 0 = (i64)->i64（step）/ type 1 = ()->i64（run。あちらの入口と同じ形）
+    let mut t = Vec::new(); uleb(2, &mut t);
+    t.push(0x60); uleb(1, &mut t); t.push(0x7E); uleb(1, &mut t); t.push(0x7E);
+    t.push(0x60); uleb(0, &mut t); uleb(1, &mut t); t.push(0x7E);
+    section(1, t, &mut m);
+    let mut f = Vec::new(); uleb(2, &mut f); uleb(0, &mut f); uleb(1, &mut f);
+    section(3, f, &mut m);
+    let mut mem = Vec::new(); uleb(1, &mut mem); mem.push(0x00); uleb(1, &mut mem);
+    section(5, mem, &mut m);
+    // ⚠️ export は `run` と `kernel` の二つだけ。seam の名(`step`/`memory`)は出さない ——
+    //    これは測るための ROM であって接点ではない。名を重ねると読み手が seam と取り違える。
+    let mut e = Vec::new(); uleb(2, &mut e);
+    uleb(3, &mut e); e.extend_from_slice(b"run");    e.push(0x00); uleb(1, &mut e);
+    uleb(6, &mut e); e.extend_from_slice(b"kernel"); e.push(0x00); uleb(1, &mut e);
+    section(7, e, &mut m);
+    // func#0 = step（engine と同じ body）
+    let mut b0 = Vec::new();
+    uleb(1, &mut b0); uleb(nlocals, &mut b0); b0.push(0x7E);
+    b0.extend_from_slice(body); b0.push(0x0B);
+    // func#1 = run —— 軌跡を焼いて step を順に呼び、最後の返り値だけ残す
+    let mut b1 = Vec::new();
+    uleb(0, &mut b1);                                   // 局所なし
+    for (i, ev) in evs.iter().enumerate() {
+        b1.push(0x42); sleb(*ev, &mut b1);              // i64.const ev
+        b1.push(0x10); uleb(0, &mut b1);                // call step
+        if i + 1 < evs.len() { b1.push(0x1A); }         // drop（最後だけ残す）
+    }
+    if evs.is_empty() { b1.push(0x42); sleb(0, &mut b1); }
+    b1.push(0x0B);
+    let mut c = Vec::new(); uleb(2, &mut c);
+    uleb(b0.len() as u32, &mut c); c.extend_from_slice(&b0);
+    uleb(b1.len() as u32, &mut c); c.extend_from_slice(&b1);
     section(10, c, &mut m);
     no_ifop(&m);
     m
@@ -1971,6 +2023,21 @@ WebAssembly.instantiate(bin).then(({{instance}})=>{{
         wc.op_u(0x20, 1);                                     // 返り値 = 新 total
         let module = wasm_engine_module(&wc.b, wc.nslots - 1);
         fs::write("engine.wasm", &module).unwrap();
+
+        // 合流の列に載せるための ROM（seam ではない）。軌跡は **Python 床が出した真値**を使う
+        // ⇒ 期待値をここに書き写さない（数詞は一箇所）。⚠️ 素材が無い日は黙って飛ばさず落とす。
+        let tj = P::new(&fs::read_to_string("engine_trace.json")
+            .expect("engine_trace.json が要る(engine_emit.py)")).val();
+        let evs: Vec<i64> = match objget(&tj, "evs") {
+            Some(Json::Arr(a)) => a.iter().map(|x| match x { Json::Num(n) => *n, _ => 0 }).collect(),
+            _ => panic!("engine_trace.json に evs が無い") };
+        assert!(!evs.is_empty(), "軌跡が空 —— 測る物が無い");
+        let probe = wasm_engine_probe_module(&wc.b, wc.nslots - 1, &evs);
+        fs::write("engine_probe.wasm", &probe).unwrap();
+        let want = match objget(&tj, "final").and_then(|f| objget(f, "total")) {
+            Some(Json::Num(n)) => *n, _ => panic!("final.total が無い") };
+        println!("  段H probe: engine_probe.wasm {} B / 軌跡 {} 歩 / 期待 total {} \
+[ENGINE-ROM ok]", probe.len(), evs.len(), want);
 
         // 接点そのもの —— seam をデータで置く。既存の web/app 側はこれだけ読めばよい。
         // ⚠️ ここに `"wasm": <目方>` が在った（〜契約 v1.0.0）。**約束ではなく実装の事実**で、

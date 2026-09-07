@@ -19,7 +19,7 @@ cons/減り	COMMON.md	| **cons が主役**(list 300 を積んで畳む) | 3,967,
 段G/整数/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **⟦100⟧ B** / **107 B** |	web	wasm (\d+) B
 段G/閉包/バイト	COMMON.md	| 段G wasm(整数ループ / 閉包) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 段G′/cons/バイト	COMMON.md	| **段G′ wasm(cons が主役 —— pair を線形メモリの bump heap へ)** | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
-段H/バイト	COMMON.md	| 段H engine wasm(状態 + step) | ⟦159⟧ B |	engine	wasm (\d+) B
+段H/バイト	COMMON.md	| 段H engine wasm(状態 + step) | ⟦159⟧ B |	engine	step 式 ×2 → wasm (\d+) B
 段G/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **⟦2,694⟧ B** / **4,154 B** |	web	自己完結 HTML (\d+) B
 段H/HTML	COMMON.md	| 自己完結 HTML(段G / 段H) | **2,694 B** / **⟦4,154⟧ B** |	engine	自己完結 HTML (\d+) B
 閉包/inline/バイト	COMMON.md	inline で丸ごと消え、**wasm ⟦107⟧ B** まで届く。	clos	段G′ wasm (\d+) B
@@ -51,7 +51,7 @@ README/wasm/整数	symbolon/README.md	| wasm (integer loop / closure) | **⟦100
 README/wasm/閉包	symbolon/README.md	| wasm (integer loop / closure) | **100 B** / **⟦107⟧ B** |	clos	段G′ wasm (\d+) B
 README/wasm/cons	symbolon/README.md	| wasm with a bump heap (cons-heavy) | **⟦226⟧ B** |	cons	段G′ wasm (\d+) B
 README/x86	symbolon/README.md	| x86-64 machine code, hand-encoded, `mmap` + W^X | **⟦102⟧ B** |	ladder	機械語 (\d+) B
-README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦159⟧ B** |	engine	wasm (\d+) B
+README/engine	symbolon/README.md	| engine module (state + `step`) | **⟦159⟧ B** |	engine	step 式 ×2 → wasm (\d+) B
 README/html	symbolon/README.md	| self-contained HTML, wasm inlined as base64 | **⟦2,694⟧ B** |	web	自己完結 HTML (\d+) B
 README/頭/wasm	symbolon/README.md	**⟦100⟧-byte** wasm	web	wasm (\d+) B
 README/頭/比	symbolon/README.md	falls by **⟦407⟧×**	ladder	段E は \d+ 個。\*\*(\d+) 分の 1
@@ -90,3 +90,8 @@ README/str/バイト	symbolon/README.md	| wasm for the string-heavy program (lit
 塔/乗算	COMMON.md	一層の乗算 k = ⟦713.5⟧ / 763.0(h=3 は h=1 の 544,360 倍)。	tower	h2/h1 ([\d.]+) 倍
 塔/高さ非依存	COMMON.md	`[⟦TOWER⟧ ok]` を出す	tower	\[(TOWER) ok\]
 段H/合流/probe_join	COMMON.md	`instrs=⟦140⟧ hostcalls=0`	icount	probe_join\s+(\d+)
+段H/probe/バイト	COMMON.md	| `engine_probe.wasm` | ⟦256⟧ B / 軌跡 18 歩 |	engine	engine_probe\.wasm (\d+) B
+段H/probe/歩	COMMON.md	| `engine_probe.wasm` | 256 B / 軌跡 ⟦18⟧ 歩 |	engine	軌跡 (\d+) 歩
+段H/probe/命令	COMMON.md	| 決定的な命令数 | ⟦952⟧ |	icount	engine_probe\s+(\d+)
+段H/probe/真値	COMMON.md	| 姉妹実験が返した最終 total | ⟦6⟧ ← Python 床の真値と一致（threaded / byte 歩行の両路で） |	engine	期待 total (\d+) \[ENGINE-ROM ok\]
+段H/probe/印	COMMON.md	⟦ENGINE-ROM⟧ ok	engine	\[(ENGINE-ROM) ok\]

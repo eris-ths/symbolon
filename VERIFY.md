@@ -72,6 +72,25 @@ for a fixed seed. ⚠️ Without it, two gates skip — and the suite says so ra
 🔴 The first time we could finally run it, three of the ledger's own patterns turned out to be
 wrong. They had been written for a gate that had never once been fired. See `MISSES.md`.
 
+## The engine, on the same instrument
+
+```bash
+{ printf 'v'; cat engine_probe.wasm; } | futh      # value
+ERIS_EXP03=/path/to/exp/03-wasm-userland bash icount.sh   # instruction count, in the ROM list
+```
+
+The engine seam exports `step` and `memory`; the sister runtime enters at `run`. For a long
+time this repository recorded that as a reason the engine could not be measured there.
+▲ That was one way in, not the only one. Adding `run` to the seam would widen a published
+promise in order to make measurement convenient — the wrong direction. So the seam is
+untouched, and the ladder emits a second module from **the same function body**, with a driver
+that replays the truth trace the Python floor produced. Nothing is copied, and no expected
+value is written down twice: the driver reads the trace.
+
+⚠️ That module is not the seam. It exports `run` and `kernel` only, and deliberately does not
+carry the names `step` and `memory` — a thing you measure and a thing you hand over should not
+answer to the same name.
+
 ## The tower
 
 ```bash
