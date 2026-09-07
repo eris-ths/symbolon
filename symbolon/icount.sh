@@ -24,7 +24,10 @@ if [ -z "$exp03" ] || [ ! -f "$exp03/init.zig" ]; then
   exit 0
 fi
 command -v python3 >/dev/null || { echo "python3 が要る —— skip。"; exit 0; }
-python3 -m ziglang version >/dev/null 2>&1 || { echo "zig が無い(`pip install ziglang`)—— skip。"; exit 0; }
+# 🔴 単引用符（五十四段）。二重引用符の中の逆クォートは **コマンド置換** ⇒ この skip の一行は
+#    zig が無い器で `pip install ziglang` を **実際に走らせていた**。報せる文が物を入れてはいけない。
+#    ⚠️ この器には zig が在る ⇒ 五十四段まで一度も踏まれていない枝だった。
+python3 -m ziglang version >/dev/null 2>&1 || { echo 'zig が無い（pip install ziglang）—— skip。'; exit 0; }
 
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 cp "$exp03"/*.zig "$work"/ 2>/dev/null

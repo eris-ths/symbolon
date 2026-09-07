@@ -161,6 +161,17 @@ if [ ! -x "$fl" ]; then sk "floor_ladder が無い"; else
   fi
 fi
 
+# ---- 門⑨ 語彙表の生死 ----
+echo "門⑨ 語彙"
+o="$(bash lexicon.sh 2>&1)"
+if printf '%s' "$o" | grep -q '\[LEXICON ok\]'; then
+  ok "$(printf '%s' "$o" | grep -o '語 [0-9]* / 生きている [0-9]* / \*\*指した先から消えた [0-9]\*\*' | head -1 || echo '語彙表の指す先を撃った')"
+  printf '%s\n' "$o" | grep -E '^  (語|◆)' | sed 's/^/     /'
+else
+  ng "語彙表が腐っている or 測れない"
+  printf '%s\n' "$o" | grep -E '^  ⛔' | sed 's/^/     /'
+fi
+
 # ---- 判定 ----
 echo
 echo "通過 $pass / 落ち $fail / 保留 $skip"
@@ -170,7 +181,9 @@ elif [ "$skip" -gt 0 ]; then
   echo "⏸ **保留** —— 落ちてはいないが、$skip 門を *撃てていない*。"
   echo "   ⚠️ 撃てていない門を「通った」と読まない。環境を揃えて撃ち直す。"
 else
-  echo "✅ **昇格可** —— 八門すべてを撃って通った。"
+  # 🔴 **数を書かない。** 「八門」と書いた二枚が、門が八になった日に腐った（五十三段）。
+  #    ⇒ 門の数は *走った物* から引く。門番の無い数を、門番の報告に置かない（gates.yml と同じ作法）。
+  echo "✅ **昇格可** —— $pass 門すべてを撃って通った。"
   echo "   ◆ 昇格先は symbolon/ —— 中身を移してよい。"
 fi
 _finished=1

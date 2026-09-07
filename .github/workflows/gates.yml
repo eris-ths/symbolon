@@ -2,6 +2,8 @@
 #
 # ◆ This is what makes "Don't trust this README. Run it." checkable by a stranger without
 #   cloning: the run log shows the same pass / fail / skip counts they would get locally.
+# ⚠️ No count in this file on purpose: "eight" here rotted once already when a gate was added.
+#    The run prints its own count; a number kept in two places drifts in one.
 # ⚠️ A skipped gate is not a pass. The suite exits 0 on skips by design, so a green check
 #   here means "nothing failed", not "everything ran". The counts are in the job summary.
 name: gates
@@ -12,7 +14,7 @@ on:
 
 jobs:
   gates:
-    name: eight gates (skips are not passes)
+    name: the gates (skips are not passes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

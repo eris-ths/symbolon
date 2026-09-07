@@ -74,7 +74,7 @@ if [ "$ndead" -gt "$ceil" ]; then
   exit 1
 fi
 if [ "$ndead" -lt "$ceil" ]; then
-  echo "  ◆ 天井 $ceil を $((天井 - n死)) 下回った ⇒ **天井も下げること**"
+  echo "  ◆ 天井 $ceil を $((ceil - ndead)) 下回った ⇒ **天井も下げること**"
 else
   echo "  歩き手の表は $ndead 本が未踏（天井ちょうど） [WALKER ok]"
   exit 0

@@ -11,7 +11,7 @@ as a row, with that column filled in, or it does not arrive.
 
 | instrument | fire it with | what it can say | ▲ what it cannot say |
 |---|---|---|---|
-| **the suite** | `bash promote.sh` | whether all eight gates pass on this tree, reported as `passed / failed / skipped` | whether a *skipped* gate would have passed. The run refuses to say "promotable" while any gate merely did not run — ⚠️ **a skip is never read as a pass** |
+| **the suite** | `bash promote.sh` | whether every gate passes on this tree, reported as `passed / failed / skipped` | whether a *skipped* gate would have passed. The run refuses to say "promotable" while any gate merely did not run — ⚠️ **a skip is never read as a pass** |
 | **the ledger** | `python3 claims.py` | that every number in these documents still matches the tool that produced it, and that no new bare claim has been added | that a number is *right*. It compares the document against the tool; if both are wrong the same way, they agree |
 | **the ladder** | `rustc -O floor_ladder.rs -o /tmp/fl` then `/tmp/fl`, `--probe probe_cons.json`, `--web`, `--engine` | instruction counts before and after folding, arena cell counts, and the byte size of every emitted artifact | wall-clock. Counts are deterministic; times move ±40% between runs on the same code, so ratios are reported only within one run |
 | **a real engine, a real browser** | `node probe_run.mjs probe_clos.wasm 45750`, `node web_verify.mjs`, `node engine_verify.mjs` | that the emitted module computes the expected value outside our own runner, and that a browser loads the page and clicks it | anything, when Node or a browser is missing. Two gates then skip — and the suite says so rather than passing |

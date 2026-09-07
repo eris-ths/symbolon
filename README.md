@@ -19,6 +19,14 @@ module — no LLVM, no emscripten, no runtime, nothing to install.
 
 ▲ This is a research vessel, not a product. Read *What this does not do* before adopting it.
 
+◆ **There is a second thing here, and for some readers it is the first.** Every number above was
+produced by a machine, and is re-derived by gates that read the claim out of the document and out
+of the tool and refuse to agree unless the two match. The *subject* is the Futamura projection;
+the *method* is what to do when the thing writing your numbers is also the thing being checked.
+`MISSES.md` is the honest half of it — predictions written down before each run, kept whether or
+not they held. If you came for the method rather than for the interpreter, read `MISSES.md`,
+`claims.py` and `promote.sh` first, and read the rest as the worked example they run against.
+
 `symbolon` — Greek σύμβολον: a tally broken in two, matched later to prove it is genuine. The
 name is the method: everything here is checked by putting two halves together.
 
@@ -53,6 +61,41 @@ These appear throughout. They are load-bearing, not decoration.
 | ▲ | a limit, honestly stated |
 | ⚠️ | read this before acting |
 | 🔴 | this one bit us |
+
+## Terms
+
+This tree names things, and the names are not standard. ▲ The Japanese notes carry more of them;
+these are the ones you need to read the English pages.
+
+⚠️ **`projection` means two different things here** and both are load-bearing. Which one is meant
+is always decidable from context, and confusing them is the fastest way to misread this repository.
+
+<!-- lexicon -->
+
+| term | what it means here | where it lives |
+|---|---|---|
+| fold | specialising the interpreter against one program, so the dispatch disappears | `README.md` |
+| projection ① | the Futamura kind: interpreter + program → a program | `README.md` |
+| projection ② | the publishing kind: this whole tree, regenerated from a private repository | `MISSES.md` |
+| shadow | this published tree, as opposed to the source it is projected from | `README.md` |
+| tally | σύμβολον: two halves matched to prove a claim, rather than one side asserting it | `README.md` |
+| floor | one rung of the interpreter, A through D — the thing being folded away | `floor_ladder.rs` |
+| ladder | the four floors plus the specialiser and back-ends, in one file | `floor_ladder.rs` |
+| stage | an emission target above the floors — E through H: specialised, x86-64, wasm, engine | `floor_ladder.rs` |
+| specialiser | the thing that performs the fold | `MISSES.md` |
+| probe | one small program used as a subject, with its expected answer | `floor_ladder.rs` |
+| seam | the engine's exported surface (`step`, `memory`) — what a host would hold onto | `floor_ladder.rs` |
+| ROM | an emitted module handed to the sister runtime to be counted, not run for its value | `tower.sh` |
+| walker | the pass that reads an emitted module's opcodes and reports what it stepped on | `walker.sh` |
+| gate | a check that can fail. A skipped one is never read as passed | `VERIFY.md` |
+| ledger | the table of every numeric claim, with the command that re-derives each one | `VERIFY.md` |
+| anchor | the token a ledger row matches on. A row anchored on prose goes quiet when the prose is edited | `VERIFY.md` |
+| ratchet | a count that may move one way only, so a check cannot be weakened by accident | `VERIFY.md` |
+| exemption | a ledger row excused from re-derivation, with a reason. An exemption that excuses nothing fails | `VERIFY.md` |
+
+◆ A gate reads this table and fails if a term no longer appears where the last column says it does,
+and if the table shrinks. ▲ It cannot do the other direction — it does not know which coined words
+are missing from the table. That half is a floor, not a proof.
 
 ---
 
@@ -106,7 +149,7 @@ contract.lock  version + fingerprints. Change the contract → raise the version
 floor_ladder.rs   four interpreter floors, the specializer, and the back-ends
 floor_ladder.mjs  the same fold, in a second runtime, as a cross-check
 
-promote.sh     eight gates. Skips are never read as passes
+promote.sh     the gate suite. Skips are never read as passes
 claims.py      every numeric claim, re-derived from the tool that produced it
 icount.sh      deterministic instruction counts from a sister runtime
 tower.sh       the same runtime stacked h deep; P's floor cost must not move with h
