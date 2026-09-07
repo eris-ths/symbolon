@@ -101,6 +101,8 @@ def 建てる():
     "fuzz":      (["python3", "fuzz.py", "--n", "120", "--seed", "20260906", "--depth", "4"],
                   ("file", "../experiments/third/kokkos.py")),
     "icount":    (["bash", "icount.sh"],                             ("env", "ERIS_EXP03")),
+    # ⚠️ 塔は h=3 で k² 段(≈ 93 億 dispatch)を回す ⇒ この門だけ分単位。前提は icount と同じ一つの欠け。
+    "tower":     (["bash", "tower.sh"],                              ("env", "ERIS_EXP03")),
 }
 
 # 🔴 **錨の要る節**(2026-09-06)。関門③ は *量* しか見ない ⇒ **散文で書かれた能力の主張**は

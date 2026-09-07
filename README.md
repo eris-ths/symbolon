@@ -108,6 +108,7 @@ floor_ladder.mjs  the same fold, in a second runtime, as a cross-check
 promote.sh     seven gates. Skips are never read as passes
 claims.py      every numeric claim, re-derived from the tool that produced it
 icount.sh      deterministic instruction counts from a sister runtime
+tower.sh       the same runtime stacked h deep; P's floor cost must not move with h
 ```
 
 ## Running it

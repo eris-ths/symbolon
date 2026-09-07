@@ -71,3 +71,19 @@ for a fixed seed. ⚠️ Without it, two gates skip — and the suite says so ra
 
 🔴 The first time we could finally run it, three of the ledger's own patterns turned out to be
 wrong. They had been written for a gate that had never once been fired. See `MISSES.md`.
+
+## The tower
+
+```bash
+ERIS_EXP03=/path/to/exp/03-wasm-userland bash tower.sh
+```
+
+Stacks the sister interpreter h=1/2/3 deep around our ROM and reads the `[cost]` each layer
+prints for itself. The innermost number is the floor cost of P; it must not move with h.
+⚠️ We check that by **presence** — three floors that agree — not by "nothing crashed".
+
+▲ **What this does not show: that the answers agree.** Our ROM imports nothing, so it has no
+`env.print` and every height emits an empty stdout. The sister suite anchors output identity
+byte-for-byte; we cannot, because that anchor needs an import we deliberately do not have.
+What matches here is the instruction count, not the value. That is the price of self-sufficiency,
+and it is written down rather than glossed.

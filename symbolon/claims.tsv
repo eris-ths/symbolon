@@ -84,3 +84,9 @@ README/str/バイト	symbolon/README.md	| wasm for the string-heavy program (lit
 寿命/LIFO/否/既定	symbolon/MISSES.md	so the guard rejects | ⟦1,020⟧ cells | **1,020 cells** |	lifo_def_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 寿命/LIFO/否/峰	symbolon/MISSES.md	so the guard rejects | 1,020 cells | **⟦1,020⟧ cells** |	lifo_run	heap の峰: \d+ B = \*\*(\d+) セル\*\*
 段H/自給の続き	COMMON.md	⟦NO-IFOP⟧ ok	engine	\[(NO-IFOP) ok\]
+塔/底値	COMMON.md	| h=1 (interp 1 層) | ⟦17,017⟧ | — | 17,017 |	tower	高さ非依存: 底値は h=1/2/3 で (\d+)
+塔/h2	COMMON.md	| h=2 (interp 2 層) | 17,017 | — | ⟦12,140,870⟧ |	tower	h=2\s+\d+\s+(\d+)
+塔/h3	COMMON.md	| h=3 (interp 3 層) | 17,017 | 12,140,870 | ⟦9,263,369,734⟧ |	tower	h=3\s+\d+\s+\d+\s+(\d+)
+塔/乗算	COMMON.md	一層の乗算 k = ⟦713.5⟧ / 763.0(h=3 は h=1 の 544,360 倍)。	tower	h2/h1 ([\d.]+) 倍
+塔/高さ非依存	COMMON.md	`[⟦TOWER⟧ ok]` を出す	tower	\[(TOWER) ok\]
+段H/合流/probe_join	COMMON.md	`instrs=⟦140⟧ hostcalls=0`	icount	probe_join\s+(\d+)

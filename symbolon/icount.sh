@@ -38,8 +38,10 @@ echo "== 決定的な命令数(exp/03 の init.zig。byte-walk・seed 固定で 
 printf '%-26s %10s\n' 'ROM' 'instrs'
 # ⚠️ probe_join は **値位置の `if`** を持つ唯一の ROM —— 2026-09-06 に block(void) 二枚へ
 #    書き直した形が、あちらの受け側を本当に通るかは **ここでしか測れない**。
-#    ▲ その日の器に exp/03 が無かったので、この行自身はまだ一度も撃たれていない（十五段の型:
-#      撃てていない門の中身は検証されていない）⇒ 環境が在る日に、まずここを疑う。
+#    ✅ 2026-09-07(四十五段)に初めて撃った —— `instrs=140 hostcalls=0`、trap も
+#      「未対応 opcode」の叫びも無し ⇒ **block 二枚の値位置 `if` は本当に受けられる**。
+#      ⚠️ 受け側は未知 opcode を黙って飛ばさない（threaded は error.UnsupportedOp、
+#      byte 歩行は「未対応 opcode 0x.. @body」で停止）⇒ 「通った」は「見逃された」ではない。
 # ※ engine.wasm はこの列に入れられない —— export が `step`/`memory` で、あちらの ABI(`run`)と違う。
 #   接点の可否は seam の側の問いであって、この計器の問いではない。
 for w in compiled probe_clos probe_str probe_join; do
